@@ -1,0 +1,502 @@
+[
+  {
+    "monthly_revenue": 60000,
+    "net_profit": 5413,
+    "debt": 25176,
+    "emi": 439,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 153,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 50000,
+    "net_profit": 13324,
+    "debt": 94488,
+    "emi": 1035,
+    "gst_compliance": 0,
+    "past_disputes": 0,
+    "business_age": 49,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 190000,
+    "net_profit": 36285,
+    "debt": 246506,
+    "emi": 2448,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 126,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 110000,
+    "net_profit": 14041,
+    "debt": 41807,
+    "emi": 488,
+    "gst_compliance": 0,
+    "past_disputes": 0,
+    "business_age": 75,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 100000,
+    "net_profit": 14904,
+    "debt": 39831,
+    "emi": 392,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 98,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 90000,
+    "net_profit": 14145,
+    "debt": 25251,
+    "emi": 236,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 22,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 110000,
+    "net_profit": 24869,
+    "debt": 116708,
+    "emi": 1726,
+    "gst_compliance": 1,
+    "past_disputes": 1,
+    "business_age": 176,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 120000,
+    "net_profit": 9043,
+    "debt": 49715,
+    "emi": 830,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 174,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 80000,
+    "net_profit": 25924,
+    "debt": 72338,
+    "emi": 755,
+    "gst_compliance": 1,
+    "past_disputes": 1,
+    "business_age": 112,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 70000,
+    "net_profit": 13412,
+    "debt": 120897,
+    "emi": 2634,
+    "gst_compliance": 0,
+    "past_disputes": 0,
+    "business_age": 142,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 120000,
+    "net_profit": 34050,
+    "debt": 194767,
+    "emi": 3319,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 38,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 190000,
+    "net_profit": 33336,
+    "debt": 54307,
+    "emi": 937,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 99,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 120000,
+    "net_profit": 10949,
+    "debt": 194189,
+    "emi": 3822,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 85,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 580000,
+    "net_profit": 66211,
+    "debt": 775962,
+    "emi": 16730,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 179,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 310000,
+    "net_profit": 89967,
+    "debt": 138802,
+    "emi": 1780,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 49,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 790000,
+    "net_profit": 203416,
+    "debt": 719302,
+    "emi": 12171,
+    "gst_compliance": 0,
+    "past_disputes": 0,
+    "business_age": 130,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 900000,
+    "net_profit": 48348,
+    "debt": 1649637,
+    "emi": 36759,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 93,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 860000,
+    "net_profit": 155708,
+    "debt": 483265,
+    "emi": 4273,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 46,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 480000,
+    "net_profit": 118508,
+    "debt": 439409,
+    "emi": 4324,
+    "gst_compliance": 0,
+    "past_disputes": 0,
+    "business_age": 147,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 380000,
+    "net_profit": 39811,
+    "debt": 575047,
+    "emi": 13079,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 122,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 840000,
+    "net_profit": 90920,
+    "debt": 1632124,
+    "emi": 32989,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 97,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 570000,
+    "net_profit": 133108,
+    "debt": 181913,
+    "emi": 1826,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 96,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 430000,
+    "net_profit": 94727,
+    "debt": 574602,
+    "emi": 7436,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 168,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 440000,
+    "net_profit": 40536,
+    "debt": 835862,
+    "emi": 18186,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 170,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 220000,
+    "net_profit": 36788,
+    "debt": 419521,
+    "emi": 6325,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 147,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 380000,
+    "net_profit": 73767,
+    "debt": 724480,
+    "emi": 14150,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 169,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 2880000,
+    "net_profit": 707973,
+    "debt": 1059003,
+    "emi": 24933,
+    "gst_compliance": 1,
+    "past_disputes": 1,
+    "business_age": 168,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 3980000,
+    "net_profit": 533621,
+    "debt": 1191593,
+    "emi": 15105,
+    "gst_compliance": 1,
+    "past_disputes": 1,
+    "business_age": 121,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 3320000,
+    "net_profit": 677359,
+    "debt": 3965885,
+    "emi": 40969,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 106,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 1550000,
+    "net_profit": 152298,
+    "debt": 574773,
+    "emi": 13475,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 47,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 4950000,
+    "net_profit": 579187,
+    "debt": 7187663,
+    "emi": 84980,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 41,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 1520000,
+    "net_profit": 237411,
+    "debt": 499636,
+    "emi": 8139,
+    "gst_compliance": 0,
+    "past_disputes": 0,
+    "business_age": 96,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 1760000,
+    "net_profit": 395544,
+    "debt": 2197929,
+    "emi": 43721,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 99,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 1260000,
+    "net_profit": 84344,
+    "debt": 424340,
+    "emi": 7216,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 176,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 2440000,
+    "net_profit": 258174,
+    "debt": 2340211,
+    "emi": 35235,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 34,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 3020000,
+    "net_profit": 254289,
+    "debt": 5412224,
+    "emi": 78946,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 160,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 3650000,
+    "net_profit": 704068,
+    "debt": 1485276,
+    "emi": 22694,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 122,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 3740000,
+    "net_profit": 192603,
+    "debt": 4117665,
+    "emi": 70022,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 108,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 6770000,
+    "net_profit": 489615,
+    "debt": 8114838,
+    "emi": 94639,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 52,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 7410000,
+    "net_profit": 1499672,
+    "debt": 6254796,
+    "emi": 102231,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 23,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 12410000,
+    "net_profit": 3765523,
+    "debt": 13341348,
+    "emi": 272069,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 117,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 6500000,
+    "net_profit": 552805,
+    "debt": 1866606,
+    "emi": 40493,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 25,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 14950000,
+    "net_profit": 1345331,
+    "debt": 4953150,
+    "emi": 92608,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 88,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 19430000,
+    "net_profit": 2239543,
+    "debt": 17979274,
+    "emi": 389521,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 29,
+    "collateral_type": 0
+  },
+  {
+    "monthly_revenue": 19720000,
+    "net_profit": 4740577,
+    "debt": 9334818,
+    "emi": 152885,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 157,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 5430000,
+    "net_profit": 1281954,
+    "debt": 10715804,
+    "emi": 112633,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 106,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 14820000,
+    "net_profit": 844755,
+    "debt": 11298901,
+    "emi": 234193,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 172,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 15510000,
+    "net_profit": 1181827,
+    "debt": 19365429,
+    "emi": 272972,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 143,
+    "collateral_type": 2
+  },
+  {
+    "monthly_revenue": 19020000,
+    "net_profit": 3334367,
+    "debt": 28450780,
+    "emi": 315521,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 85,
+    "collateral_type": 1
+  },
+  {
+    "monthly_revenue": 13260000,
+    "net_profit": 2039836,
+    "debt": 2965588,
+    "emi": 46668,
+    "gst_compliance": 1,
+    "past_disputes": 0,
+    "business_age": 128,
+    "collateral_type": 1
+  }
+]
