@@ -2,71 +2,60 @@
 Pydantic schemas for input validation and response serialization.
 """
 from pydantic import BaseModel, Field, field_validator
-from typing import Dict
+from typing import Dict, List
 
 
 class ScoringRequest(BaseModel):
-    """Request schema for credit scoring endpoint."""
+    """Request schema for hybrid credit scoring endpoint."""
     
     monthly_revenue: float = Field(..., ge=0, description="Average monthly revenue in rupees")
-    net_profit: float = Field(..., ge=0, description="Average net profit in rupees")
-    debt: float = Field(..., ge=0, description="Total outstanding debt in rupees")
+    total_debt: float = Field(..., ge=0, description="Total outstanding debt in rupees")
     emi: float = Field(..., ge=0, description="Monthly EMI obligations in rupees")
-    gst_compliance: int = Field(..., ge=0, le=1, description="GST compliance flag (0 or 1)")
-    past_disputes: int = Field(..., ge=0, le=1, description="Past legal disputes flag (0 or 1)")
-    business_age: int = Field(..., ge=0, description="Business age in months")
-    collateral_type: int = Field(default=0, ge=0, description="Collateral type code (reserved for future use)")
+    business_age_months: int = Field(..., ge=0, description="Business age in months")
+    gst_compliant: bool = Field(..., description="GST compliance status")
+    has_disputes: bool = Field(..., description="Whether applicant has past disputes")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "monthly_revenue": 500000,
-                "net_profit": 100000,
-                "debt": 200000,
+                "total_debt": 200000,
                 "emi": 20000,
-                "gst_compliance": 1,
-                "past_disputes": 0,
-                "business_age": 36,
-                "collateral_type": 1
+                "business_age_months": 36,
+                "gst_compliant": True,
+                "has_disputes": False
             }
         }
 
-    @field_validator('gst_compliance', 'past_disputes')
-    @classmethod
-    def validate_binary_flags(cls, v):
-        if v not in (0, 1):
-            raise ValueError('Flag must be 0 or 1')
-        return v
 
-
-class FeatureContributions(BaseModel):
-    """Feature contributions to the final score."""
+class KeyFactors(BaseModel):
+    """Positive and negative factors influencing the score."""
     
-    financial_health: float = Field(..., ge=0, le=100, description="Financial health contribution (0-100)")
-    cash_flow_stability: float = Field(..., ge=0, le=100, description="Cash flow stability contribution (0-100)")
-    gst_compliance: float = Field(..., ge=0, le=100, description="GST compliance contribution (0-100)")
-    fraud_risk: float = Field(..., ge=0, le=100, description="Fraud risk contribution (0-100)")
-    business_age: float = Field(..., ge=0, le=100, description="Business age contribution (0-100)")
+    positive: List[str] = Field(..., description="List of positive factors")
+    negative: List[str] = Field(..., description="List of negative factors")
 
 
 class ScoringResponse(BaseModel):
-    """Response schema for credit scoring endpoint."""
+    """Response schema for hybrid credit scoring endpoint."""
     
-    final_score: float = Field(..., ge=0, le=100, description="Final credit score (0-100)")
+    rule_score: float = Field(..., ge=0, le=100, description="Deterministic rule-based score (0-100)")
+    pd: float = Field(..., ge=0, le=1, description="Probability of default (0-1)")
+    final_score: float = Field(..., ge=0, le=100, description="Hybrid final score (0-100)")
     risk_category: str = Field(..., description="Risk category: Low Risk, Medium Risk, or High Risk")
-    feature_contributions: FeatureContributions = Field(..., description="Contribution of each feature to final score")
+    decision: str = Field(..., description="Lending decision: Approve, Manual Review, or Reject")
+    key_factors: KeyFactors = Field(..., description="Positive and negative factors")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "final_score": 72,
-                "risk_category": "Medium Risk",
-                "feature_contributions": {
-                    "financial_health": 25,
-                    "cash_flow_stability": 18,
-                    "gst_compliance": 20,
-                    "fraud_risk": 12,
-                    "business_age": 10
+                "rule_score": 75.0,
+                "pd": 0.1234,
+                "final_score": 68.5,
+                "risk_category": "Low Risk",
+                "decision": "Approve",
+                "key_factors": {
+                    "positive": ["strong revenue", "established business", "compliant"],
+                    "negative": ["high EMI stress"]
                 }
             }
         }

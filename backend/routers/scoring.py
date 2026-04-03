@@ -1,8 +1,8 @@
 """
-Scoring API endpoints for credit score calculation and risk assessment.
+Scoring API endpoints for hybrid credit scoring and risk assessment.
 """
 from fastapi import APIRouter, HTTPException
-from schemas.models import ScoringRequest, ScoringResponse, FeatureContributions, HealthResponse
+from schemas.models import ScoringRequest, ScoringResponse, HealthResponse
 from services.scoring_engine import ScoringEngine
 
 router = APIRouter()
@@ -19,14 +19,14 @@ def health_check():
     """
     return {
         "status": "healthy",
-        "version": "1.0.0"
+        "version": "2.0.0"
     }
 
 
 @router.post("/calculate-score", response_model=ScoringResponse)
 def calculate_score(request: ScoringRequest):
     """
-    Calculate credit score and risk category for an applicant.
+    Calculate hybrid credit score using rule-based scoring and probability of default.
     
     Endpoint: POST /calculate-score
     
@@ -34,34 +34,30 @@ def calculate_score(request: ScoringRequest):
         request: ScoringRequest with applicant financial metrics
         
     Returns:
-        ScoringResponse with final_score, risk_category, and feature_contributions
+        ScoringResponse with rule_score, pd, final_score, risk_category, decision, and key_factors
         
     Raises:
         HTTPException: If request validation fails (400)
     """
     try:
-        # Calculate final score and contributions
-        final_score, contributions = engine.calculate_final_score(
+        # Calculate score using hybrid approach
+        result = engine.calculate_score(
             monthly_revenue=request.monthly_revenue,
-            net_profit=request.net_profit,
-            debt=request.debt,
+            total_debt=request.total_debt,
             emi=request.emi,
-            gst_compliance=request.gst_compliance,
-            past_disputes=request.past_disputes,
-            business_age=request.business_age
+            business_age_months=request.business_age_months,
+            gst_compliant=request.gst_compliant,
+            has_disputes=request.has_disputes
         )
         
-        # Determine risk category
-        risk_category = engine.map_risk_category(final_score)
-        
-        # Round contributions to 2 decimal places for clarity
-        rounded_contributions = {k: round(v, 2) for k, v in contributions.items()}
-        
-        # Create response
+        # Create response with all result fields
         response = ScoringResponse(
-            final_score=round(final_score, 2),
-            risk_category=risk_category,
-            feature_contributions=FeatureContributions(**rounded_contributions)
+            rule_score=result["rule_score"],
+            pd=result["pd"],
+            final_score=result["final_score"],
+            risk_category=result["risk_category"],
+            decision=result["decision"],
+            key_factors=result["key_factors"]
         )
         
         return response
