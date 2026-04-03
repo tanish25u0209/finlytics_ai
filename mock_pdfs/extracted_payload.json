@@ -1,0 +1,8 @@
+{
+  "monthly_revenue": 500000,
+  "emi": 20000,
+  "total_debt": 200000,
+  "gst_compliant": true,
+  "business_age_months": 48,
+  "has_disputes": false
+}

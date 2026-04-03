@@ -43,7 +43,7 @@ const mockSubmissions = [
 
 export default function DashboardPage() {
   const { state, dispatch } = useAppContext();
-  const { applicationState } = state;
+  const { applicationState, documents, notifications, formData } = state;
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'lifecycle' | 'disbursement'>('lifecycle');
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -55,12 +55,60 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
+  const backendScoring = formData.backendScoring || {};
+  const gstinResult = backendScoring.gstinResult;
+  const scoreResult = backendScoring.scoreResult;
+
+  const dashboardDocuments = documents.length
+    ? documents.map((doc, index) => ({
+        id: index + 1,
+        name: doc.name,
+        type: doc.type,
+        uploadedOn: mounted ? new Date(doc.uploadedAt).toLocaleDateString() : doc.uploadedAt,
+        status: doc.status === 'approved' ? 'Verified' : doc.status === 'pending' ? 'Pending' : 'Rejected',
+      }))
+    : [];
+
+  const dashboardNotifications = notifications.length
+    ? notifications.map((notif, index) => ({
+        id: index + 1,
+        sender: notif.from,
+        role: notif.from.includes('Agent') ? 'AI Agent' : 'Credit Manager',
+        message: notif.message,
+        timestamp: mounted ? new Date(notif.timestamp).toLocaleString() : notif.timestamp,
+      }))
+    : [];
+
+  const negotiationThread = gstinResult
+    ? [
+        {
+          id: 1,
+          sender: 'System',
+          message: `GSTIN ${gstinResult.gstin} scored ${gstinResult.credit_score} (${gstinResult.risk_band}).`,
+          timestamp: mounted ? new Date(gstinResult.score_freshness_timestamp).toLocaleString() : gstinResult.score_freshness_timestamp,
+          type: 'response',
+        },
+      ]
+    : [];
+
+  const submissionHistory = scoreResult
+    ? [
+        {
+          id: 1,
+          date: mounted && applicationState.lastUpdated ? new Date(applicationState.lastUpdated).toLocaleDateString() : applicationState.lastUpdated,
+          document: 'Backend Credit Score',
+          amount: scoreResult.final_score.toFixed(2),
+          status: scoreResult.decision,
+        },
+      ]
+    : [];
+
   const currentStageIndex = STAGES.findIndex((s) => s.id === applicationState.currentStage);
 
   const handleAdvanceStage = () => {
     const nextStageIndex = currentStageIndex + 1;
     if (nextStageIndex < STAGES.length) {
-      const nextStage = STAGES[nextStageIndex].id;
+      const nextStage = STAGES[nextStageIndex].id as typeof applicationState.currentStage;
       dispatch({
         type: 'UPDATE_APPLICATION_STATE',
         payload: { currentStage: nextStage, lastUpdated: new Date().toISOString() }
@@ -78,7 +126,7 @@ export default function DashboardPage() {
         <div className="space-y-2">
           <p style={{ color: '#64748B' }}>
             Application ID: <span className="font-mono" style={{ color: '#D4A843' }}>
-              {applicationState.applicationId || 'FAIM-2024-00001'}
+              {applicationState.applicationId || 'Not submitted yet'}
             </span>
           </p>
           {mounted && applicationState.submittedAt && (
@@ -177,19 +225,43 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Demo: Simulate Stage Advance Button */}
-          <div className="flex justify-end">
+          {/* Demo: Simulate Stage Advance Button - Repositioned */}
+          <div className="flex justify-between items-center gap-4">
+            <div></div>
+            <div className="flex gap-3">
+              <button
+                className="px-6 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90"
+                style={{
+                  backgroundColor: '#1E2A3A',
+                  color: '#D4A843',
+                  border: '1px solid #D4A843',
+                }}
+              >
+                Score Documents
+              </button>
+              <button
+                className="px-6 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90"
+                style={{
+                  backgroundColor: '#D4A843',
+                  color: '#0B0F1A',
+                }}
+              >
+                Get Explainable Score
+              </button>
+            </div>
+          </div>
+          <div className="flex justify-end mt-4">
             <button
               onClick={handleAdvanceStage}
               disabled={currentStageIndex >= STAGES.length - 1}
-              className="px-4 py-2 rounded-lg text-xs font-medium transition-all hover:opacity-80 disabled:opacity-50"
+              className="px-6 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80 disabled:opacity-50"
               style={{
-                backgroundColor: '#1E2A3A',
-                color: '#64748B',
-                border: '1px solid #1E2A3A',
+                backgroundColor: '#D4A843',
+                color: '#0B0F1A',
+                border: '1px solid #D4A843',
               }}
             >
-              [Demo] Next Stage →
+              Next →
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -218,7 +290,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {mockDocuments.map((doc) => (
+                    {dashboardDocuments.map((doc) => (
                       <tr key={doc.id} style={{ borderBottomColor: '#1E2A3A' }} className="border-b hover:opacity-80 transition-opacity">
                         <td className="py-2 px-2 flex items-center gap-2">
                           <FileText size={16} style={{ color: '#D4A843' }} />
@@ -260,7 +332,7 @@ export default function DashboardPage() {
                 Messages from Credit Manager
               </h2>
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {mockNotifications.map((notif) => (
+                {dashboardNotifications.map((notif) => (
                   <div key={notif.id} className="p-3 rounded-lg" style={{ backgroundColor: 'rgba(212, 168, 67, 0.05)', border: '1px solid #1E2A3A' }}>
                     <div className="flex items-start justify-between mb-1">
                       <div>
@@ -296,7 +368,7 @@ export default function DashboardPage() {
               </h2>
 
               {/* Query Form */}
-              <div className="mb-6 pb-6" style={{ borderBottomColor: '#1E2A3A' }} className="border-b">
+              <div className="mb-6 pb-6 border-b" style={{ borderBottomColor: '#1E2A3A' }}>
                 <div className="space-y-3 mb-4">
                   <div>
                     <label style={{ color: '#64748B' }} className="block text-sm mb-1">
@@ -363,7 +435,7 @@ export default function DashboardPage() {
                   Previous Negotiations
                 </h3>
                 <div className="space-y-3">
-                  {mockNegotiations.map((neg) => (
+                  {negotiationThread.map((neg) => (
                     <div key={neg.id} className="p-3 rounded-lg" style={{ backgroundColor: 'rgba(212, 168, 67, 0.05)' }}>
                       <div className="flex items-start justify-between mb-1">
                         <p style={{ color: '#D4A843' }} className="text-sm font-semibold">
@@ -450,7 +522,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockSubmissions.map((sub) => (
+                  {submissionHistory.map((sub) => (
                     <tr key={sub.id} style={{ borderBottomColor: '#1E2A3A' }} className="border-b hover:opacity-80 transition-opacity">
                       <td className="py-2 px-2" style={{ color: '#F1F5F9' }}>{sub.date}</td>
                       <td className="py-2 px-2" style={{ color: '#F1F5F9' }}>{sub.document}</td>

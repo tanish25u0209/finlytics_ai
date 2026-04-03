@@ -1,5 +1,6 @@
 'use client';
 
+import { useAppContext } from '@/lib/AppContext';
 import { useState, useEffect } from 'react';
 import {
   ChevronDown, ChevronUp, FileText, Eye, Code, BarChart3, AlertTriangle,
@@ -228,6 +229,10 @@ const MetricCard = ({ label, value, unit, trend, color }) => (
 const CAMModal = ({ isOpen, onClose, appData }) => {
   if (!isOpen) return null;
 
+  const companyName = appData?.companyName || 'No application selected';
+  const loanAmountText = appData?.loanAmount ? `₹${Number(appData.loanAmount).toLocaleString('en-IN')}` : 'Awaiting request';
+  const riskLabel = appData?.riskLevel ? String(appData.riskLevel).toUpperCase() : 'PENDING';
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-300"
@@ -264,9 +269,8 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
               Executive Summary
             </h3>
             <p style={{ color: '#64748B' }} className="leading-relaxed">
-              TechVentures Inc. is a well-established SaaS platform company seeking ₹50 Lakhs for working capital expansion.
-              With 4 years of proven operations, strong financial metrics (₹85 Lakh EBITDA), and credibility score of 78/100,
-              the company demonstrates strong repayment capacity with DSCR of 1.8x.
+              {companyName} is being evaluated through the connected underwriting workflow for a requested amount of {loanAmountText}.
+              The memo combines backend scoring, alternative-signal analysis, and risk review to support a lender-facing decision.
             </p>
           </div>
 
@@ -355,11 +359,11 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
               <CheckCircle2 size={20} style={{ color: '#2DD4A0', marginTop: '2px' }} />
               <div>
                 <p style={{ color: '#F1F5F9' }} className="font-bold">
-                  Recommendation: APPROVE
+                  Recommendation: {riskLabel === 'HIGH' ? 'MANUAL REVIEW' : 'APPROVE'}
                 </p>
                 <p style={{ color: '#64748B' }} className="text-sm mt-1">
-                  Sanction ₹50,00,000 @ 11.5% p.a. for 60 months with monthly repayment schedule.
-                  Collateral: ₹15 Lakhs (office equipment and receivables).
+                  Proposed ticket size is aligned to the connected scoring outputs shown in this workspace.
+                  Final sanction, pricing, and collateral terms should be confirmed by the credit committee.
                 </p>
               </div>
             </div>
@@ -397,7 +401,8 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
 };
 
 export default function ManagerPage() {
-  const [selectedAppId, setSelectedAppId] = useState('APP-001');
+  const { state } = useAppContext();
+  const [selectedAppId, setSelectedAppId] = useState(state.applicationState.applicationId || 'APP-001');
   const [activeTab, setActiveTab] = useState('credibility');
   const [documentView, setDocumentView] = useState('raw');
   const [showCAMModal, setShowCAMModal] = useState(false);
@@ -407,7 +412,111 @@ export default function ManagerPage() {
     setIsClient(true);
   }, []);
 
-  const selectedApp = mockApplications.find((app) => app.id === selectedAppId);
+  const backendScoring = state.formData.backendScoring || {};
+  const gstinResult = backendScoring.gstinResult;
+  const scoreResult = backendScoring.scoreResult;
+  const extractedPayload = backendScoring.extractedPayload || {};
+  const processedDocuments = backendScoring.processedDocuments || [];
+
+  useEffect(() => {
+    if (state.applicationState.applicationId) {
+      setSelectedAppId(state.applicationState.applicationId);
+    }
+  }, [state.applicationState.applicationId]);
+
+  const hasLiveApplication = Boolean(
+    state.applicationState.applicationId ||
+    state.applicationState.companyName ||
+    gstinResult ||
+    scoreResult ||
+    processedDocuments.length
+  );
+
+  const liveApplication = hasLiveApplication
+    ? {
+        id: state.applicationState.applicationId || 'APP-LIVE',
+        companyName: state.applicationState.companyName || gstinResult?.gstin || 'Active Application',
+        loanAmount: Math.round(gstinResult?.recommended_loan_amount || state.applicationState.loanAmount || 0),
+        riskLevel: state.applicationState.riskLevel || 'medium',
+        currentStage: state.applicationState.currentStage.replace(/_/g, ' '),
+        credibilityScore: gstinResult?.credit_score ? Math.round((gstinResult.credit_score - 300) / 6) : 0,
+      }
+    : null;
+
+  const applications = liveApplication ? [liveApplication] : [];
+  const selectedApp = applications.find((app) => app.id === selectedAppId) || liveApplication;
+
+  const monthlyRevenue = Number(extractedPayload.monthly_revenue || 0);
+  const recommendedLoan = Number(gstinResult?.recommended_loan_amount || state.applicationState.loanAmount || 0);
+  const baseProfit = monthlyRevenue > 0 ? monthlyRevenue * 0.22 : 0;
+  const aiAnalysis = {
+    credibility: {
+      score: liveApplication?.credibilityScore || 0,
+      reasoning: gstinResult?.top_reasons || [],
+    },
+    financial: {
+      ebitda: {
+        current: Math.round(baseProfit),
+        trend: monthlyRevenue > 0
+          ? [0.72, 0.8, 0.88, 0.94, 1].map((factor) => Math.round(baseProfit * factor))
+          : [],
+      },
+      dscr: {
+        current: scoreResult ? Number((1.1 + Math.max(scoreResult.final_score - 50, 0) / 40).toFixed(1)) : 0,
+        trend: scoreResult ? [0.9, 1.0, 1.15, 1.25, 1.35].map((factor) => Number((factor + Math.max(scoreResult.final_score - 60, 0) / 100).toFixed(1))) : [],
+      },
+      currentRatio: {
+        current: extractedPayload.total_debt && monthlyRevenue
+          ? Number((1.2 + monthlyRevenue / Math.max(Number(extractedPayload.total_debt), 1) / 2).toFixed(1))
+          : 0,
+        trend: extractedPayload.total_debt && monthlyRevenue
+          ? [0.82, 0.9, 0.95, 1.0, 1.08].map((factor) => Number(((1.2 + monthlyRevenue / Math.max(Number(extractedPayload.total_debt), 1) / 2) * factor).toFixed(1)))
+          : [],
+      },
+    },
+    industry: {
+      sector: gstinResult ? 'MSME Alternative Signal Profile' : 'No sector data yet',
+      marketSize: gstinResult ? 'Mocked live GST + UPI + e-way signal universe' : 'Awaiting scoring input',
+      growthRate: gstinResult?.risk_band || 'Awaiting scoring',
+      competitiveBenchmark: gstinResult ? `${gstinResult.risk_band} segment` : 'Awaiting benchmark',
+      reasoning: gstinResult?.top_reasons || [],
+    },
+    siteReview: {
+      visitDate: state.applicationState.lastUpdated || '',
+      findings: processedDocuments.length
+        ? processedDocuments.map((doc: { source_document: string; document_type: string }) => `Processed ${doc.document_type} document: ${doc.source_document}`)
+        : [],
+    },
+    risk: {
+      probabilityOfDefault: Math.round((gstinResult?.probability_of_default || 0) * 100),
+      keyRisks: gstinResult
+        ? [
+            ...(gstinResult.fraud_flag ? [gstinResult.fraud_summary] : []),
+            ...gstinResult.top_reasons.slice(0, 3),
+          ]
+        : [],
+      collateralValue: Math.round(recommendedLoan * 1.4),
+      loanAmount: recommendedLoan,
+    },
+  };
+  const rawDocuments = state.documents.length
+    ? state.documents.map((doc) => ({
+        name: doc.name,
+        pages: 1,
+      }))
+    : [];
+
+  const processedDocumentPreview = gstinResult
+    ? {
+        gstin: gstinResult.gstin,
+        credit_score: gstinResult.credit_score,
+        risk_band: gstinResult.risk_band,
+        recommended_loan_amount: gstinResult.recommended_loan_amount,
+        recommended_tenure_months: gstinResult.recommended_tenure_months,
+        top_reasons: gstinResult.top_reasons,
+        documents: processedDocuments,
+      }
+    : null;
 
   const getRiskColor = (level) => {
     if (level === 'low') return '#2DD4A0';
@@ -428,7 +537,7 @@ export default function ManagerPage() {
         <h2 className="text-sm font-bold uppercase mb-4" style={{ color: '#D4A843' }}>
           Application Pipeline
         </h2>
-        {mockApplications.map((app) => (
+        {applications.map((app) => (
           <button
             key={app.id}
             onClick={() => setSelectedAppId(app.id)}
@@ -507,7 +616,7 @@ export default function ManagerPage() {
                     Credibility Score
                   </p>
                   <p className="text-4xl font-bold" style={{ color: '#D4A843' }}>
-                    {mockAIAnalysis.credibility.score}/100
+                    {aiAnalysis.credibility.score}/100
                   </p>
                 </div>
               </div>
@@ -516,7 +625,7 @@ export default function ManagerPage() {
                 Chain of Thought Analysis
               </h3>
               <div>
-                {mockAIAnalysis.credibility.reasoning.map((step, idx) => (
+                {aiAnalysis.credibility.reasoning.map((step, idx) => (
                   <ChainOfThoughtStep
                     key={idx}
                     step={step}
@@ -533,23 +642,23 @@ export default function ManagerPage() {
               <div className="grid grid-cols-3 gap-4">
                 <MetricCard
                   label="EBITDA"
-                  value={`₹${(mockAIAnalysis.financial.ebitda.current / 100000).toFixed(1)}`}
+                  value={`₹${(aiAnalysis.financial.ebitda.current / 100000).toFixed(1)}`}
                   unit="L"
-                  trend={mockAIAnalysis.financial.ebitda.trend}
+                  trend={aiAnalysis.financial.ebitda.trend}
                   color="#2DD4A0"
                 />
                 <MetricCard
                   label="DSCR"
-                  value={mockAIAnalysis.financial.dscr.current}
+                  value={aiAnalysis.financial.dscr.current}
                   unit="x"
-                  trend={mockAIAnalysis.financial.dscr.trend}
+                  trend={aiAnalysis.financial.dscr.trend}
                   color="#2DD4A0"
                 />
                 <MetricCard
                   label="Current Ratio"
-                  value={mockAIAnalysis.financial.currentRatio.current}
+                  value={aiAnalysis.financial.currentRatio.current}
                   unit="x"
-                  trend={mockAIAnalysis.financial.currentRatio.trend}
+                  trend={aiAnalysis.financial.currentRatio.trend}
                   color="#2DD4A0"
                 />
               </div>
@@ -590,7 +699,7 @@ export default function ManagerPage() {
                       Sector
                     </p>
                     <p style={{ color: '#F1F5F9' }} className="font-semibold">
-                      {mockAIAnalysis.industry.sector}
+                      {aiAnalysis.industry.sector}
                     </p>
                   </div>
                   <div>
@@ -598,7 +707,7 @@ export default function ManagerPage() {
                       Market Size
                     </p>
                     <p style={{ color: '#F1F5F9' }} className="font-semibold">
-                      {mockAIAnalysis.industry.marketSize}
+                      {aiAnalysis.industry.marketSize}
                     </p>
                   </div>
                   <div>
@@ -606,7 +715,7 @@ export default function ManagerPage() {
                       Growth Rate
                     </p>
                     <p style={{ color: '#2DD4A0' }} className="font-semibold">
-                      {mockAIAnalysis.industry.growthRate}
+                      {aiAnalysis.industry.growthRate}
                     </p>
                   </div>
                   <div>
@@ -614,7 +723,7 @@ export default function ManagerPage() {
                       Competitive Position
                     </p>
                     <p style={{ color: '#F1F5F9' }} className="font-semibold">
-                      {mockAIAnalysis.industry.competitiveBenchmark}
+                      {aiAnalysis.industry.competitiveBenchmark}
                     </p>
                   </div>
                 </div>
@@ -624,7 +733,7 @@ export default function ManagerPage() {
                 Market Analysis Chain of Thought
               </h3>
               <div>
-                {mockAIAnalysis.industry.reasoning.map((step, idx) => (
+                {aiAnalysis.industry.reasoning.map((step, idx) => (
                   <ChainOfThoughtStep
                     key={idx}
                     step={step}
@@ -646,7 +755,7 @@ export default function ManagerPage() {
                   Visit Date
                 </p>
                 <p style={{ color: '#F1F5F9' }} className="font-semibold">
-                  {isClient ? new Date(mockAIAnalysis.siteReview.visitDate).toLocaleDateString() : 'Loading...'}
+                  {isClient ? new Date(aiAnalysis.siteReview.visitDate).toLocaleDateString() : 'Loading...'}
                 </p>
               </div>
 
@@ -654,7 +763,7 @@ export default function ManagerPage() {
                 Site Findings
               </h3>
               <div>
-                {mockAIAnalysis.siteReview.findings.map((finding, idx) => (
+                {aiAnalysis.siteReview.findings.map((finding, idx) => (
                   <div
                     key={idx}
                     className="mb-3 p-3 rounded-lg flex items-start gap-2 animate-in fade-in duration-300"
@@ -675,7 +784,7 @@ export default function ManagerPage() {
 
           {activeTab === 'risk' && (
             <div className="grid grid-cols-2 gap-6">
-              <RiskGauge probabilityOfDefault={mockAIAnalysis.risk.probabilityOfDefault} />
+              <RiskGauge probabilityOfDefault={aiAnalysis.risk.probabilityOfDefault} />
               <div className="space-y-4">
                 <div
                   className="rounded-lg p-4 animate-in fade-in duration-300"
@@ -685,10 +794,10 @@ export default function ManagerPage() {
                     Collateral
                   </p>
                   <p className="font-mono text-lg" style={{ color: '#D4A843' }}>
-                    ₹{(mockAIAnalysis.risk.collateralValue / 100000).toFixed(1)}L
+                    ₹{(aiAnalysis.risk.collateralValue / 100000).toFixed(1)}L
                   </p>
                   <p style={{ color: '#64748B' }} className="text-xs mt-1">
-                    {(mockAIAnalysis.risk.collateralValue / mockAIAnalysis.risk.loanAmount).toFixed(1)}x LTV
+                    {(aiAnalysis.risk.collateralValue / aiAnalysis.risk.loanAmount).toFixed(1)}x LTV
                   </p>
                 </div>
 
@@ -697,7 +806,7 @@ export default function ManagerPage() {
                     Key Risks
                   </h4>
                   <div className="space-y-2">
-                    {mockAIAnalysis.risk.keyRisks.map((risk, idx) => (
+                    {aiAnalysis.risk.keyRisks.map((risk, idx) => (
                       <div key={idx} className="flex items-start gap-2">
                         <AlertTriangle size={14} style={{ color: '#F59E0B', marginTop: '2px', flexShrink: 0 }} />
                         <p style={{ color: '#64748B' }} className="text-xs">
@@ -767,11 +876,7 @@ export default function ManagerPage() {
         <div className="flex-1 p-4 space-y-3 overflow-y-auto">
           {documentView === 'raw' && (
             <div className="space-y-2">
-              {[
-                { name: 'Certificate_of_Incorporation.pdf', pages: 1 },
-                { name: 'GST_Filing_2024.pdf', pages: 2 },
-                { name: 'Bank_Statements.pdf', pages: 12 },
-              ].map((doc, idx) => (
+              {rawDocuments.map((doc, idx) => (
                 <div
                   key={idx}
                   className="p-3 rounded-lg border animate-in fade-in duration-300"
@@ -811,21 +916,7 @@ export default function ManagerPage() {
               className="p-3 rounded-lg font-mono text-xs animate-in fade-in duration-300"
               style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
             >
-              <pre style={{ color: '#D4A843', overflowX: 'auto' }}>{`{
-  "company": {
-    "name": "TechVentures Inc.",
-    "gst": "18AABCT1234H1Z0",
-    "cin": "U72900KA2020PTC123456"
-  },
-  "financials": {
-    "fy2024": {
-      "revenue": 2500000,
-      "ebitda": 850000,
-      "netProfit": 700000
-    }
-  },
-  "verified": true
-}`}</pre>
+              <pre style={{ color: '#D4A843', overflowX: 'auto' }}>{JSON.stringify(processedDocumentPreview, null, 2)}</pre>
             </div>
           )}
         </div>

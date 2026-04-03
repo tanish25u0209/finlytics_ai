@@ -3,10 +3,10 @@
 import { useAppContext } from '@/lib/AppContext';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, Settings } from 'lucide-react';
+import { Bell, LogOut } from 'lucide-react';
 
 export default function Navbar() {
-  const { state, updateUserRole, getUnreadCount } = useAppContext();
+  const { state, logout, getUnreadCount } = useAppContext();
   const router = useRouter();
   const pathname = usePathname();
   const unreadCount = getUnreadCount();
@@ -22,16 +22,20 @@ export default function Navbar() {
           { href: '/fintech/agents', label: 'Agent Monitor' },
         ];
 
-  const handleRoleSwitch = () => {
-    const newRole = state.currentUser.role === 'borrower' ? 'credit_manager' : 'borrower';
-    updateUserRole(newRole);
-    
-    // Redirect to appropriate default page
-    const defaultPath = newRole === 'borrower' ? '/fintech/apply' : '/fintech/manager';
-    router.push(defaultPath);
+  const handleLogout = () => {
+    logout();
+    router.push('/fintech');
   };
 
   const isActive = (href: string) => pathname === href;
+  const homeHref = state.currentUser.role === 'borrower' ? '/fintech/dashboard' : '/fintech/manager';
+  const avatar = state.currentUser.avatar?.trim();
+  const initials = state.currentUser.name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 h-16 border-b" style={{
@@ -40,7 +44,7 @@ export default function Navbar() {
     }}>
       <div className="h-full px-6 flex items-center justify-between">
         {/* Left: Logo */}
-        <Link href="/fintech" className="flex items-center gap-2 flex-shrink-0">
+        <Link href={homeHref} className="flex items-center gap-2 flex-shrink-0">
           <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: '#D4A843' }}>
             <div className="w-4 h-4 rotate-45" style={{ backgroundColor: '#0B0F1A' }}></div>
           </div>
@@ -86,11 +90,20 @@ export default function Navbar() {
 
           {/* User Avatar & Info */}
           <div className="flex items-center gap-2">
-            <img
-              src={state.currentUser.avatar}
-              alt={state.currentUser.name}
-              className="w-8 h-8 rounded-full object-cover"
-            />
+            {avatar ? (
+              <img
+                src={avatar}
+                alt={state.currentUser.name}
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                style={{ backgroundColor: '#D4A843', color: '#0B0F1A' }}
+              >
+                {initials || 'FA'}
+              </div>
+            )}
             <div className="flex flex-col">
               <span className="text-xs font-medium" style={{ color: '#F1F5F9' }}>
                 {state.currentUser.name}
@@ -107,17 +120,18 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Role Switcher */}
+          {/* Logout */}
           <button
-            onClick={handleRoleSwitch}
-            className="text-xs px-3 py-1.5 rounded-md font-medium transition-colors hover:opacity-80"
+            onClick={handleLogout}
+            className="text-xs px-3 py-1.5 rounded-md font-medium transition-colors hover:opacity-80 inline-flex items-center gap-2"
             style={{
               backgroundColor: '#1E2A3A',
               color: '#D4A843',
               border: '1px solid #D4A843',
             }}
           >
-            Switch Role
+            <LogOut size={14} />
+            Logout
           </button>
         </div>
       </div>

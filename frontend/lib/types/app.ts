@@ -1,8 +1,15 @@
+export type UserRole = 'borrower' | 'credit_manager';
+
 export interface CurrentUser {
   name: string;
-  role: 'borrower' | 'credit_manager';
+  role: UserRole;
   email: string;
   avatar: string;
+}
+
+export interface AuthState {
+  isAuthenticated: boolean;
+  initialized: boolean;
 }
 
 export interface ApplicationState {
@@ -28,6 +35,7 @@ export interface AgentStatus {
   lastRun: string;
   findings: string;
   anomalyDetected?: boolean;
+  completionPercent?: number;
 }
 
 export interface AgentStatuses {
@@ -46,6 +54,7 @@ export interface Notification {
 }
 
 export interface AppContextState {
+  auth: AuthState;
   currentUser: CurrentUser;
   applicationState: ApplicationState;
   formData: Record<string, any>;
@@ -55,7 +64,10 @@ export interface AppContextState {
 }
 
 export type AppAction =
-  | { type: 'UPDATE_USER_ROLE'; payload: 'borrower' | 'credit_manager' }
+  | { type: 'UPDATE_USER_ROLE'; payload: UserRole }
+  | { type: 'HYDRATE_AUTH'; payload: { currentUser: CurrentUser; isAuthenticated: boolean } }
+  | { type: 'LOGIN'; payload: CurrentUser }
+  | { type: 'LOGOUT' }
   | { type: 'UPDATE_APPLICATION_STATE'; payload: Partial<ApplicationState> }
   | { type: 'UPDATE_FORM_DATA'; payload: { stepKey: string; data: any } }
   | { type: 'ADD_DOCUMENT'; payload: Document }

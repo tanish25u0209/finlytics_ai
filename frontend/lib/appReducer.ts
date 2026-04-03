@@ -1,13 +1,54 @@
 import { AppContextState, AppAction } from './types/app';
 
+const guestUser: AppContextState['currentUser'] = {
+  name: 'Guest User',
+  role: 'borrower',
+  email: 'guest@finserv-aim.demo',
+  avatar: '',
+};
+
 export function appReducer(state: AppContextState, action: AppAction): AppContextState {
   switch (action.type) {
+    case 'HYDRATE_AUTH':
+      return {
+        ...state,
+        auth: {
+          isAuthenticated: action.payload.isAuthenticated,
+          initialized: true,
+        },
+        currentUser: action.payload.currentUser,
+      };
+
+    case 'LOGIN':
+      return {
+        ...state,
+        auth: {
+          isAuthenticated: true,
+          initialized: true,
+        },
+        currentUser: action.payload,
+      };
+
+    case 'LOGOUT':
+      return {
+        ...state,
+        auth: {
+          isAuthenticated: false,
+          initialized: true,
+        },
+        currentUser: guestUser,
+      };
+
     case 'UPDATE_USER_ROLE':
       return {
         ...state,
         currentUser: {
           ...state.currentUser,
           role: action.payload,
+        },
+        auth: {
+          ...state.auth,
+          initialized: true,
         },
       };
 

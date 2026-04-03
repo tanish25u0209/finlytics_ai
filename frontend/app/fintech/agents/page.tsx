@@ -1,5 +1,6 @@
 'use client';
 
+import { useAppContext } from '@/lib/AppContext';
 import { useState, useEffect } from 'react';
 import {
   Shield, BarChart3, AlertTriangle, Brain, CheckCircle2
@@ -206,16 +207,49 @@ const AgentCard = ({ config, status, isClient }) => {
 };
 
 export default function AgentsPage() {
+  const { state } = useAppContext();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const completedCount = Object.values(mockAgentStatuses).filter(
+  const liveAgentStatuses = {
+    compliance: {
+      ...mockAgentStatuses.compliance,
+      status: state.agentStatuses.kyc.status,
+      lastRun: state.agentStatuses.kyc.lastRun,
+      findings: state.agentStatuses.kyc.findings,
+      completionPercent: state.agentStatuses.kyc.completionPercent ?? (state.agentStatuses.kyc.status === 'complete' ? 100 : 40),
+    },
+    financial: {
+      ...mockAgentStatuses.financial,
+      status: state.agentStatuses.financial.status,
+      lastRun: state.agentStatuses.financial.lastRun,
+      findings: state.agentStatuses.financial.findings,
+      completionPercent: state.agentStatuses.financial.completionPercent ?? (state.agentStatuses.financial.status === 'complete' ? 100 : state.agentStatuses.financial.status === 'running' ? 65 : 0),
+    },
+    fraud: {
+      ...mockAgentStatuses.fraud,
+      status: state.agentStatuses.fraud.status,
+      lastRun: state.agentStatuses.fraud.lastRun,
+      findings: state.agentStatuses.fraud.findings,
+      anomalyDetected: state.agentStatuses.fraud.anomalyDetected,
+      completionPercent: state.agentStatuses.fraud.completionPercent ?? (state.agentStatuses.fraud.status === 'complete' ? 100 : 0),
+    },
+    decision: {
+      ...mockAgentStatuses.decision,
+      status: state.agentStatuses.decision.status,
+      lastRun: state.agentStatuses.decision.lastRun,
+      findings: state.agentStatuses.decision.findings,
+      completionPercent: state.agentStatuses.decision.completionPercent ?? (state.agentStatuses.decision.status === 'complete' ? 100 : state.agentStatuses.decision.status === 'running' ? 70 : 0),
+    },
+  };
+
+  const completedCount = Object.values(liveAgentStatuses).filter(
     (a) => a.status === 'complete'
   ).length;
-  const runningCount = Object.values(mockAgentStatuses).filter(
+  const runningCount = Object.values(liveAgentStatuses).filter(
     (a) => a.status === 'running'
   ).length;
 
@@ -237,7 +271,7 @@ export default function AgentsPage() {
           <AgentCard
             key={config.key}
             config={config}
-            status={mockAgentStatuses[config.key as keyof typeof mockAgentStatuses]}
+            status={liveAgentStatuses[config.key as keyof typeof liveAgentStatuses]}
             isClient={isClient}
           />
         ))}
