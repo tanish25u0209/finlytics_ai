@@ -9,6 +9,33 @@ import {
 import { useState, useEffect } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const AUTH_USERS_KEY = 'finserv-aim-auth-users';
+const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
+
+type StoredAuthUser = {
+  name: string;
+  email: string;
+  role: 'borrower' | 'credit_manager';
+};
+
+type StoredAssignedApplication = {
+  id: string;
+  borrowerEmail: string;
+  borrowerName: string;
+  managerEmail: string | null;
+  managerName: string | null;
+  companyName: string;
+  loanAmount: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  currentStage: string;
+  credibilityScore: number;
+  createdAt: string;
+  updatedAt: string;
+  assignmentStatus?: 'pending' | 'accepted';
+  acceptedAt?: string | null;
+  backendScoring: Record<string, unknown>;
+  documents: Array<Record<string, unknown>>;
+};
 
 type BadgeProps = {
   label: string;
@@ -259,6 +286,7 @@ export default function ApplyPage() {
 
   const currentStep = STEPS[currentStepIndex];
   const requiredPayloadReady = Object.values(extractedPayload).every((value) => value !== null);
+  const isSubmissionReady = Boolean(requiredPayloadReady && scoreResult && gstinResult);
 
   const persistBackendScoring = (patch: Record<string, unknown>) => {
     updateFormData('backendScoring', {
@@ -433,27 +461,132 @@ export default function ApplyPage() {
     }
   };
 
-  const handleInitiateSubmission = () => {
-    handleFinalSubmit();
+  const handleInitiateSubmission = async () => {
+    if (!requiredPayloadReady) {
+      setScoreError('Upload the scoring PDFs first so we can extract all required fields.');
+      addNotification({
+        id: `notif-submit-blocked-payload-${Date.now()}`,
+        from: 'System',
+        message: 'Submission blocked: complete document extraction first.',
+        timestamp: new Date().toISOString(),
+        read: false,
+      });
+      return;
+    }
+
+    if (!scoreResult) {
+      setScoreError('Run Score Documents before submitting the application.');
+      addNotification({
+        id: `notif-submit-blocked-score-${Date.now()}`,
+        from: 'System',
+        message: 'Submission blocked: run backend score first.',
+        timestamp: new Date().toISOString(),
+        read: false,
+      });
+      return;
+    }
+
+    if (!gstinResult) {
+      setGstinError('Run GSTIN explainable score before submitting the application.');
+      addNotification({
+        id: `notif-submit-blocked-gstin-${Date.now()}`,
+        from: 'System',
+        message: 'Submission blocked: complete GSTIN explainable score first.',
+        timestamp: new Date().toISOString(),
+        read: false,
+      });
+      return;
+    }
+
+    await handleFinalSubmit();
   };
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
     const applicationId = `FAIM-2024-${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`;
 
     updateApplicationState({
       applicationId,
-      currentStage: 'kyc',
+      currentStage: 'submitted',
       submittedAt: new Date().toISOString(),
       lastUpdated: new Date().toISOString(),
-      companyName: 'TechVentures Inc.',
+      companyName: state.currentUser.name || 'Borrower Application',
       loanAmount: 500000,
       riskLevel: 'medium',
     });
 
+    const nowIso = new Date().toISOString();
+    const borrowerCompany = state.currentUser.name || 'Borrower Application';
+    const fallbackAssignedRecord: StoredAssignedApplication = {
+      id: applicationId,
+      borrowerEmail: state.currentUser.email,
+      borrowerName: state.currentUser.name,
+      managerEmail: null,
+      managerName: null,
+      companyName: borrowerCompany,
+      loanAmount: 500000,
+      riskLevel: 'medium',
+      currentStage: 'submitted',
+      credibilityScore: 0,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      assignmentStatus: 'pending',
+      acceptedAt: null,
+      backendScoring: (state.formData.backendScoring || {}) as Record<string, unknown>,
+      documents: (state.documents || []) as Array<Record<string, unknown>>,
+    };
+
+    let persistedRecord = fallbackAssignedRecord;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/applications/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: applicationId,
+          borrower_email: state.currentUser.email,
+          borrower_name: state.currentUser.name,
+          company_name: borrowerCompany,
+          loan_amount: 500000,
+          risk_level: 'medium',
+          current_stage: 'submitted',
+          credibility_score: 0,
+          created_at: nowIso,
+          updated_at: nowIso,
+          backend_scoring: state.formData.backendScoring || {},
+          documents: state.documents || [],
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.application) {
+          persistedRecord = data.application as StoredAssignedApplication;
+        }
+      }
+    } catch {
+      // Keep local fallback record when backend endpoint is unavailable.
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const existingRaw = window.localStorage.getItem(APPLICATION_ASSIGNMENTS_KEY);
+        const existingApplications = existingRaw ? (JSON.parse(existingRaw) as StoredAssignedApplication[]) : [];
+        const nextApplications = [
+          persistedRecord,
+          ...existingApplications.filter((app) => app.id !== persistedRecord.id),
+        ];
+        window.localStorage.setItem(APPLICATION_ASSIGNMENTS_KEY, JSON.stringify(nextApplications));
+      } catch {
+        // Best-effort persistence for demo mode.
+      }
+    }
+
     addNotification({
       id: `notif-${Date.now()}`,
       from: 'System',
-      message: 'Application submitted successfully. KYC verification started.',
+      message: 'Application submitted successfully. Request sent to all managers for acceptance.',
       timestamp: new Date().toISOString(),
       read: false,
     });
@@ -797,6 +930,32 @@ export default function ApplyPage() {
             </div>
           )}
 
+      <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-end gap-3">
+        <div className="flex gap-3">
+          <button
+            onClick={handleCalculateScore}
+            disabled={scoreLoading}
+            className="px-5 py-2 rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg"
+            style={{ backgroundColor: '#0F1B2D', color: '#F8D36C', border: '1px solid #F8D36C' }}
+          >
+            {scoreLoading ? <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Shield size={16} />}
+            {scoreLoading ? 'Scoring...' : 'Score Documents'}
+          </button>
+          <button
+            onClick={currentStepIndex === STEPS.length - 1 ? handleInitiateSubmission : handleNext}
+            disabled={currentStepIndex === STEPS.length - 1 && !isSubmissionReady}
+            className="px-6 py-2 rounded-lg font-medium transition-all hover:opacity-90 flex items-center gap-2"
+            style={{
+              backgroundColor: '#D4A843',
+              color: '#0B0F1A',
+            }}
+          >
+            {currentStepIndex === STEPS.length - 1 ? (isSubmissionReady ? 'Submit Application' : 'Complete Scoring First') : 'Next'}
+            {currentStepIndex === STEPS.length - 1 ? <CheckCircle2 size={16} /> : <ChevronRight size={16} />}
+          </button>
+        </div>
+      </div>
+
           <div
             className="mt-8 rounded-lg p-6 space-y-6"
             style={{ backgroundColor: 'rgba(11, 15, 26, 0.65)', border: '1px solid #1E2A3A' }}
@@ -810,7 +969,10 @@ export default function ApplyPage() {
                   The original wizard stays the same. This panel just shows what the backend extracted and scored.
                 </p>
               </div>
-              <Badge label={requiredPayloadReady ? 'Scoring payload ready' : 'Waiting for scoring documents'} type={requiredPayloadReady ? 'success' : 'warning'} />
+                <Badge
+                  label={requiredPayloadReady ? 'Scoring payload ready' : 'Waiting for scoring documents'}
+                  type={requiredPayloadReady ? 'success' : 'warning'}
+                />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1049,230 +1211,12 @@ export default function ApplyPage() {
                 </div>
               ) : null}
             </div>
+
           </div>
 
-          {/* Navigation Buttons */}
-          <div className="flex items-center justify-between pt-8 mt-8 border-t" style={{ borderColor: '#1E2A3A' }}>
-            <button
-              onClick={handlePrevious}
-              disabled={currentStepIndex === 0}
-              className="px-6 py-2 rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
-              style={{
-                backgroundColor: '#1E2A3A',
-                color: '#F1F5F9',
-                border: '1px solid #1E2A3A',
-              }}
-            >
-              <ChevronLeft size={16} />
-              Back
-            </button>
-
-            <div className="ml-auto flex items-center gap-3">
-              <button
-                onClick={handleCalculateScore}
-                disabled={scoreLoading}
-                className="px-5 py-2 rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg"
-                style={{ backgroundColor: '#0F1B2D', color: '#F8D36C', border: '1px solid #F8D36C' }}
-              >
-                {scoreLoading ? <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Shield size={16} />}
-                {scoreLoading ? 'Scoring...' : 'Score Documents'}
-              </button>
-
-              {currentStepIndex === STEPS.length - 1 ? (
-                <button
-                  onClick={handleInitiateSubmission}
-                  className="px-6 py-2 rounded-lg font-medium transition-all hover:opacity-90 flex items-center gap-2"
-                  style={{
-                    backgroundColor: '#D4A843',
-                    color: '#0B0F1A',
-                  }}
-                >
-                  <Lock size={16} />
-                  Submit Application
-                </button>
-              ) : (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-2 rounded-lg font-medium transition-all hover:opacity-90 flex items-center gap-2"
-                  style={{
-                    backgroundColor: '#D4A843',
-                    color: '#0B0F1A',
-                  }}
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Submission Modal */}
-      {showSubmissionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div
-            className="rounded-lg p-8 max-w-2xl w-full animate-in fade-in zoom-in duration-300"
-            style={{ backgroundColor: '#141929', border: '2px solid #1E2A3A' }}
-          >
-            {!submissionLocked ? (
-              <>
-                <h2 className="text-2xl font-bold mb-6" style={{ color: '#F1F5F9' }}>
-                  Complete Application Submission
-                </h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* OTP Verification */}
-                  <div
-                    className="p-6 rounded-lg"
-                    style={{ backgroundColor: 'rgba(212, 168, 67, 0.05)', border: '1px solid #1E2A3A' }}
-                  >
-                    <div className="flex items-center gap-2 mb-4">
-                      <Shield size={18} style={{ color: '#D4A843' }} />
-                      <h3 className="font-bold" style={{ color: '#F1F5F9' }}>
-                        OTP Verification
-                      </h3>
-                    </div>
-
-                    <p style={{ color: '#64748B' }} className="text-sm mb-4">
-                      Verification code sent to <span style={{ color: '#F1F5F9' }}>+91 XXXX XXXX 8542</span>
-                    </p>
-
-                    <div className="mb-4">
-                      <label style={{ color: '#64748B' }} className="block text-sm mb-2">
-                        Enter 6-digit OTP (use 123456 for demo)
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={otpValue}
-                        onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ''))}
-                        placeholder="000000"
-                        className="w-full px-4 py-3 rounded-lg bg-black/30 border font-mono text-center text-lg tracking-widest focus:outline-none focus:border-2"
-                        style={{
-                          borderColor: otpVerified ? '#2DD4A0' : '#1E2A3A',
-                          color: '#D4A843',
-                        }}
-                      />
-                    </div>
-
-                    <button
-                      onClick={handleVerifyOtp}
-                      disabled={otpValue.length !== 6 || otpVerified}
-                      className="w-full py-2 rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-                      style={{
-                        backgroundColor: otpVerified ? '#2DD4A0' : '#D4A843',
-                        color: otpVerified ? '#0B0F1A' : '#0B0F1A',
-                      }}
-                    >
-                      {otpVerified ? (
-                        <>
-                          <CheckCircle2 size={16} />
-                          Verified
-                        </>
-                      ) : (
-                        'Verify OTP'
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Co-Email Approval */}
-                  <div
-                    className="p-6 rounded-lg"
-                    style={{ backgroundColor: 'rgba(100, 116, 139, 0.05)', border: '1px solid #1E2A3A' }}
-                  >
-                    <div className="flex items-center gap-2 mb-4">
-                      <FileText size={18} style={{ color: '#64748B' }} />
-                      <h3 className="font-bold" style={{ color: '#F1F5F9' }}>
-                        Co-Email Approval
-                      </h3>
-                    </div>
-
-                    <p style={{ color: '#64748B' }} className="text-sm mb-4">
-                      Approval from: <span style={{ color: '#F1F5F9' }} className="font-mono">
-                        co-auth@techventures.com
-                      </span>
-                    </p>
-
-                    <div
-                      className="p-3 rounded-lg flex items-center justify-between mb-4"
-                      style={{
-                        backgroundColor: coEmailApproved ? 'rgba(45, 212, 160, 0.1)' : coEmailVerifying ? 'rgba(212, 168, 67, 0.1)' : 'rgba(250, 204, 21, 0.1)',
-                      }}
-                    >
-                      {coEmailVerifying ? (
-                        <>
-                          <Loader size={16} style={{ color: '#D4A843', animation: 'spin 1s linear infinite' }} />
-                          <span style={{ color: '#D4A843' }} className="text-sm font-medium">
-                            Awaiting approval...
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            style={{
-                              color: coEmailApproved ? '#2DD4A0' : '#FACC15',
-                            }}
-                            className="text-sm font-medium"
-                          >
-                            {coEmailApproved ? '✓ Approved' : '⏳ Pending'}
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    <p style={{ color: '#64748B' }} className="text-xs">
-                      Approval required from secondary stakeholder. Auto-simulated after OTP verification.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleFinalSubmit}
-                  disabled={!otpVerified || !coEmailApproved}
-                  className="w-full mt-6 py-3 rounded-lg font-bold transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{
-                    backgroundColor: otpVerified && coEmailApproved ? '#D4A843' : '#1E2A3A',
-                    color: otpVerified && coEmailApproved ? '#0B0F1A' : '#64748B',
-                  }}
-                >
-                  <Lock size={16} />
-                  Complete Submission
-                </button>
-
-                <button
-                  onClick={() => setShowSubmissionModal(false)}
-                  className="w-full mt-2 py-2 rounded-lg font-medium transition-all"
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: '#64748B',
-                    border: '1px solid #1E2A3A',
-                  }}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <div className="text-center py-8">
-                <div className="mb-6 flex justify-center">
-                  <div
-                    className="w-20 h-20 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: '#2DD4A0', animation: 'zoom-in 0.5s ease-out' }}
-                  >
-                    <Lock size={40} style={{ color: '#0B0F1A' }} />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold mb-2" style={{ color: '#F1F5F9' }}>
-                  Application Submitted!
-                </h3>
-                <p style={{ color: '#64748B' }} className="mb-4">
-                  Your loan application has been successfully submitted. You will receive a confirmation email shortly.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

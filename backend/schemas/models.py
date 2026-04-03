@@ -114,3 +114,97 @@ class GstinScoreResponse(BaseModel):
     fraud_summary: str = Field(..., description="Plain-language explanation of the fraud assessment")
     linked_gstins: List[str] = Field(default_factory=list, description="Linked GSTINs involved in the mocked transaction network")
     score_freshness_timestamp: str
+
+
+class ApplicationSubmitRequest(BaseModel):
+    """Request schema to submit borrower application and assign a manager."""
+
+    id: str = Field(..., min_length=1)
+    borrower_email: str = Field(..., min_length=3)
+    borrower_name: str = Field(..., min_length=1)
+    company_name: str = Field(..., min_length=1)
+    loan_amount: float = Field(..., ge=0)
+    risk_level: str = Field(default="medium")
+    current_stage: str = Field(default="submitted")
+    credibility_score: int = Field(default=0)
+    created_at: str
+    updated_at: str
+    manager_email: Optional[str] = None
+    manager_name: Optional[str] = None
+    backend_scoring: Dict[str, Any] = Field(default_factory=dict)
+    documents: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ApplicationRecord(BaseModel):
+    """Stored application record returned by assignment endpoints."""
+
+    id: str
+    borrowerEmail: str
+    borrowerName: str
+    managerEmail: Optional[str] = None
+    managerName: Optional[str] = None
+    companyName: str
+    loanAmount: float
+    riskLevel: str
+    currentStage: str
+    credibilityScore: int
+    createdAt: str
+    updatedAt: str
+    assignmentStatus: str = Field(default="pending")
+    acceptedAt: Optional[str] = None
+    backendScoring: Dict[str, Any] = Field(default_factory=dict)
+    documents: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ApplicationSubmitResponse(BaseModel):
+    """Submit response with assigned manager and saved application."""
+
+    application: ApplicationRecord
+
+
+class ApplicationListResponse(BaseModel):
+    """List of stored application records for borrower/manager scopes."""
+
+    applications: List[ApplicationRecord]
+
+
+class ApplicationAcceptRequest(BaseModel):
+    """Manager accepts a pending borrower request."""
+
+    manager_email: str = Field(..., min_length=3)
+    manager_name: str = Field(..., min_length=1)
+
+
+class ApplicationAcceptResponse(BaseModel):
+    """Accept response containing the now-assigned application."""
+
+    application: ApplicationRecord
+
+
+class ManagerScoringSummary(BaseModel):
+    """Normalized underwriting summary for manager dashboard cards/panels."""
+
+    pd: Optional[float] = Field(default=None, ge=0, le=1)
+    final_score: Optional[float] = Field(default=None, ge=0, le=100)
+    decision: Optional[str] = None
+    risk_category: Optional[str] = None
+    credit_score: Optional[int] = Field(default=None, ge=300, le=900)
+    risk_band: Optional[str] = None
+    probability_of_default: Optional[float] = Field(default=None, ge=0, le=1)
+    recommended_loan_amount: Optional[float] = Field(default=None, ge=0)
+    recommended_tenure_months: Optional[int] = Field(default=None, ge=1)
+    top_reasons: List[str] = Field(default_factory=list)
+    document_count: int = Field(default=0, ge=0)
+
+
+class ManagerDashboardApplication(ApplicationRecord):
+    """Application record enriched with normalized scoring summary."""
+
+    scoringSummary: ManagerScoringSummary = Field(default_factory=ManagerScoringSummary)
+    tabAnalysis: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ManagerDashboardResponse(BaseModel):
+    """Manager dashboard response with enriched applications."""
+
+    applications: List[ManagerDashboardApplication]

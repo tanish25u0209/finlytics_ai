@@ -1,0 +1,64 @@
+﻿{
+    "documents":  [
+                      {
+                          "name":  "bank_statement_q1.pdf",
+                          "type":  "bank_statement"
+                      },
+                      {
+                          "name":  "gstr3b_jan.pdf",
+                          "type":  "gst_return"
+                      }
+                  ],
+    "credibility_score":  74,
+    "id":  "FAIM-DEMO-00001",
+    "updated_at":  "2026-04-04T03:55:57.4141538+05:30",
+    "risk_level":  "medium",
+    "borrower_name":  "Aarav Enterprises",
+    "current_stage":  "submitted",
+    "borrower_email":  "owner@msme.com",
+    "created_at":  "2026-04-04T03:55:57.4141538+05:30",
+    "loan_amount":  500000,
+    "backend_scoring":  {
+                            "processedDocuments":  [
+                                                       {
+                                                           "document_type":  "bank_statement",
+                                                           "source_document":  "bank_statement_q1.pdf"
+                                                       },
+                                                       {
+                                                           "document_type":  "gst_return",
+                                                           "source_document":  "gstr3b_jan.pdf"
+                                                       }
+                                                   ],
+                            "gstinResult":  {
+                                                "risk_score":  58.2,
+                                                "recommended_loan_amount":  450000,
+                                                "risk_category":  "Medium Risk",
+                                                "top_reasons":  [
+                                                                    "Healthy GST filing cadence",
+                                                                    "Moderate leverage",
+                                                                    "Stable reported cashflow"
+                                                                ],
+                                                "gstin":  "29ABCDE1234F1Z5",
+                                                "risk_band":  "Moderate",
+                                                "credit_score":  742,
+                                                "recommended_tenure_months":  24,
+                                                "probability_of_default":  0.18
+                                            },
+                            "extractedPayload":  {
+                                                     "monthly_revenue":  180000,
+                                                     "monthly_emi":  28000,
+                                                     "business_age_months":  48,
+                                                     "has_disputes":  false,
+                                                     "gst_compliant":  true,
+                                                     "total_debt":  420000
+                                                 },
+                            "scoreResult":  {
+                                                "decision":  "Review",
+                                                "rule_score":  72.4,
+                                                "final_score":  69.8,
+                                                "pd":  0.1632,
+                                                "risk_category":  "Medium Risk"
+                                            }
+                        },
+    "company_name":  "Aarav Enterprises"
+}

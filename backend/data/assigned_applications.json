@@ -1,0 +1,168 @@
+[
+  {
+    "id": "FAIM-DEMO-00001",
+    "borrowerEmail": "owner@msme.com",
+    "borrowerName": "Aarav Enterprises",
+    "managerEmail": "manager@bank.com",
+    "managerName": "Priya Sharma",
+    "companyName": "Aarav Enterprises",
+    "loanAmount": 500000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 74,
+    "createdAt": "2026-04-03T22:26:10.606895Z",
+    "updatedAt": "2026-04-03T22:26:20.874980+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-03T22:26:20.874980+00:00",
+    "backendScoring": {
+      "scoreResult": {
+        "rule_score": 72.4,
+        "pd": 0.1632,
+        "final_score": 69.8,
+        "risk_category": "Medium Risk",
+        "decision": "Review"
+      },
+      "gstinResult": {
+        "gstin": "29ABCDE1234F1Z5",
+        "credit_score": 742,
+        "risk_band": "Moderate",
+        "risk_score": 58.2,
+        "probability_of_default": 0.18,
+        "risk_category": "Medium Risk",
+        "recommended_loan_amount": 450000,
+        "recommended_tenure_months": 24,
+        "top_reasons": [
+          "Healthy GST filing cadence",
+          "Moderate leverage",
+          "Stable reported cashflow"
+        ]
+      },
+      "extractedPayload": {
+        "monthly_revenue": 180000,
+        "total_debt": 420000,
+        "monthly_emi": 28000,
+        "business_age_months": 48,
+        "gst_compliant": true,
+        "has_disputes": false
+      },
+      "processedDocuments": [
+        {
+          "document_type": "bank_statement",
+          "source_document": "bank_statement_q1.pdf"
+        },
+        {
+          "document_type": "gst_return",
+          "source_document": "gstr3b_jan.pdf"
+        }
+      ]
+    },
+    "documents": [
+      {
+        "name": "bank_statement_q1.pdf",
+        "type": "bank_statement"
+      },
+      {
+        "name": "gstr3b_jan.pdf",
+        "type": "gst_return"
+      }
+    ]
+  },
+  {
+    "id": "FAIM-2024-03361",
+    "borrowerEmail": "modgekartanish@gmail.com",
+    "borrowerName": "Tanish",
+    "managerEmail": "tanishmodgekar@gmail.com",
+    "managerName": "tanish",
+    "companyName": "Tanish",
+    "loanAmount": 500000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 0,
+    "createdAt": "2026-04-03T22:08:10.201Z",
+    "updatedAt": "2026-04-03T22:08:18.962896+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-03T22:08:18.962896+00:00",
+    "backendScoring": {
+      "extractedPayload": {
+        "monthly_revenue": 500000,
+        "total_debt": 200000,
+        "emi": 20000,
+        "business_age_months": 48,
+        "gst_compliant": true,
+        "has_disputes": false
+      },
+      "processedDocuments": [
+        {
+          "document_type": "incorporation_certificate",
+          "source_document": "incorporation_certificate_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": 48,
+          "gst_compliant": null,
+          "has_disputes": null
+        },
+        {
+          "document_type": "gst_filing",
+          "source_document": "gst_filing_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": null,
+          "gst_compliant": true,
+          "has_disputes": null
+        },
+        {
+          "document_type": "bank_statement",
+          "source_document": "bank_statement_sample.pdf",
+          "monthly_revenue": 500000,
+          "total_debt": 200000,
+          "emi": 20000,
+          "business_age_months": null,
+          "gst_compliant": null,
+          "has_disputes": null
+        },
+        {
+          "document_type": "loan_history",
+          "source_document": "loan_history_disputes_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": null,
+          "gst_compliant": null,
+          "has_disputes": false
+        }
+      ]
+    },
+    "documents": [
+      {
+        "id": "doc-incorporation_certificate_sample.pdf",
+        "name": "incorporation_certificate_sample.pdf",
+        "type": "incorporation_certificate",
+        "uploadedAt": "2026-04-03T22:07:30.950Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-gst_filing_sample.pdf",
+        "name": "gst_filing_sample.pdf",
+        "type": "gst_filing",
+        "uploadedAt": "2026-04-03T22:07:39.210Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-bank_statement_sample.pdf",
+        "name": "bank_statement_sample.pdf",
+        "type": "bank_statement",
+        "uploadedAt": "2026-04-03T22:07:54.510Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-loan_history_disputes_sample.pdf",
+        "name": "loan_history_disputes_sample.pdf",
+        "type": "loan_history",
+        "uploadedAt": "2026-04-03T22:08:07.395Z",
+        "status": "approved"
+      }
+    ]
+  }
+]

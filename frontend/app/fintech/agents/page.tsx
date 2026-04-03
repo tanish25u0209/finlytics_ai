@@ -6,6 +6,9 @@ import {
   Shield, BarChart3, AlertTriangle, Brain, CheckCircle2
 } from 'lucide-react';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
+
 // Mock agent statuses
 const mockAgentStatuses = {
   compliance: {
@@ -33,6 +36,34 @@ const mockAgentStatuses = {
     findings: 'Awaiting financial analysis completion.',
     completionPercent: 0,
   },
+};
+
+type DerivedAgentStatuses = {
+  kyc: {
+    status: 'running' | 'idle' | 'complete';
+    lastRun: string;
+    findings: string;
+    completionPercent: number;
+  };
+  financial: {
+    status: 'running' | 'idle' | 'complete';
+    lastRun: string;
+    findings: string;
+    completionPercent: number;
+  };
+  fraud: {
+    status: 'running' | 'idle' | 'complete';
+    lastRun: string;
+    findings: string;
+    anomalyDetected: boolean;
+    completionPercent: number;
+  };
+  decision: {
+    status: 'running' | 'idle' | 'complete';
+    lastRun: string;
+    findings: string;
+    completionPercent: number;
+  };
 };
 
 const agentConfigs = [
@@ -67,6 +98,8 @@ const AgentCard = ({ config, status, isClient }) => {
   const isRunning = status.status === 'running';
   const isComplete = status.status === 'complete';
   const isAnomalyDetected = config.key === 'fraud' && status.anomalyDetected;
+  const parsedLastRun = status.lastRun ? new Date(status.lastRun) : null;
+  const hasValidLastRun = Boolean(parsedLastRun && !Number.isNaN(parsedLastRun.getTime()));
 
   const getStatusColor = () => {
     if (isRunning) return '#D4A843';
@@ -169,7 +202,7 @@ const AgentCard = ({ config, status, isClient }) => {
             Last Run
           </span>
           <span style={{ color: '#F1F5F9' }} className="text-xs font-mono">
-            {isClient ? new Date(status.lastRun).toLocaleTimeString() : 'Loading...'}
+            {isClient ? (hasValidLastRun ? parsedLastRun.toLocaleTimeString() : 'Not run yet') : 'Loading...'}
           </span>
         </div>
 
@@ -209,40 +242,211 @@ const AgentCard = ({ config, status, isClient }) => {
 export default function AgentsPage() {
   const { state } = useAppContext();
   const [isClient, setIsClient] = useState(false);
+  const [derivedAgentStatuses, setDerivedAgentStatuses] = useState<DerivedAgentStatuses | null>(null);
+  const [systemMetrics, setSystemMetrics] = useState<{ system_load_percent: number; health_label: string } | null>(null);
+
+  const buildDerivedStatuses = (application: Record<string, unknown>): DerivedAgentStatuses => {
+    const updatedAt = String(application.updatedAt || new Date().toISOString());
+    const backendScoring = (application.backendScoring || {}) as Record<string, unknown>;
+    const scoringSummary = (application.scoringSummary || {}) as Record<string, unknown>;
+    const extractedPayload = (backendScoring.extractedPayload || {}) as Record<string, unknown>;
+    const scoreResult = (backendScoring.scoreResult || {}) as Record<string, unknown>;
+    const gstinResult = (backendScoring.gstinResult || {}) as Record<string, unknown>;
+    const processedDocuments = Array.isArray(backendScoring.processedDocuments)
+      ? (backendScoring.processedDocuments as unknown[])
+      : [];
+
+    const assignmentAccepted = String(application.assignmentStatus || '').toLowerCase() === 'accepted';
+    const hasExtraction = Object.keys(extractedPayload).length > 0;
+    const hasFinancial = processedDocuments.length > 0 || scoreResult.final_score !== undefined || scoringSummary.final_score !== undefined;
+    const hasFraud = gstinResult.probability_of_default !== undefined || gstinResult.fraud_flag !== undefined || scoringSummary.probability_of_default !== undefined;
+    const hasDecision = scoreResult.decision !== undefined || scoringSummary.decision !== undefined;
+
+    const kycStatus = assignmentAccepted ? 'complete' : hasExtraction ? 'running' : 'idle';
+    const financialStatus = hasFinancial ? 'complete' : hasExtraction ? 'running' : 'idle';
+    const fraudStatus = hasFraud ? 'complete' : hasFinancial ? 'running' : 'idle';
+    const decisionStatus = hasDecision ? 'complete' : (hasFinancial && hasFraud ? 'running' : 'idle');
+
+    return {
+      kyc: {
+        status: kycStatus,
+        lastRun: updatedAt,
+        findings: assignmentAccepted
+          ? 'KYC and assignment ownership verified for accepted application.'
+          : 'KYC verification in progress for current application queue.',
+        completionPercent: kycStatus === 'complete' ? 100 : kycStatus === 'running' ? 55 : 0,
+      },
+      financial: {
+        status: financialStatus,
+        lastRun: updatedAt,
+        findings: hasFinancial
+          ? 'Financial analysis populated from extracted payload and scoring outputs.'
+          : 'Financial analysis is waiting for extraction/scoring inputs.',
+        completionPercent: financialStatus === 'complete' ? 100 : financialStatus === 'running' ? 60 : 0,
+      },
+      fraud: {
+        status: fraudStatus,
+        lastRun: updatedAt,
+        findings: hasFraud
+          ? 'Fraud and risk signals evaluated from GSTIN/PD indicators.'
+          : 'Fraud analysis will start after financial and GSTIN signals are available.',
+        anomalyDetected: Boolean(gstinResult.fraud_flag),
+        completionPercent: fraudStatus === 'complete' ? 100 : fraudStatus === 'running' ? 45 : 0,
+      },
+      decision: {
+        status: decisionStatus,
+        lastRun: updatedAt,
+        findings: hasDecision
+          ? `Decision status available: ${String(scoreResult.decision || scoringSummary.decision || 'computed')}.`
+          : 'Decision agent is waiting for prerequisite analysis completion.',
+        completionPercent: decisionStatus === 'complete' ? 100 : decisionStatus === 'running' ? 70 : 0,
+      },
+    };
+  };
+
+  const getNormalizedStatus = (status: string | undefined) => {
+    if (status === 'running' || status === 'complete' || status === 'idle') {
+      return status;
+    }
+    return 'idle';
+  };
+
+  const getSafeLastRun = (candidate: string | undefined, fallback: string) => {
+    if (!candidate) {
+      return fallback;
+    }
+
+    const parsed = new Date(candidate);
+    return Number.isNaN(parsed.getTime()) ? fallback : candidate;
+  };
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  useEffect(() => {
+    if (!isClient || state.currentUser.role !== 'credit_manager') {
+      return;
+    }
+
+    const loadStatuses = async () => {
+      const managerEmail = state.currentUser.email?.toLowerCase();
+      if (!managerEmail) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`);
+        if (response.ok) {
+          const data = await response.json();
+          const apps = Array.isArray(data?.applications) ? data.applications : [];
+          if (apps.length) {
+            const latest = [...apps].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
+            setDerivedAgentStatuses(buildDerivedStatuses(latest));
+            return;
+          }
+        }
+      } catch {
+        // Use local fallback below.
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = window.localStorage.getItem(APPLICATION_ASSIGNMENTS_KEY);
+          const records = raw ? (JSON.parse(raw) as Record<string, unknown>[]) : [];
+          const scoped = records.filter((item) => String(item.managerEmail || '').toLowerCase() === managerEmail);
+          if (scoped.length) {
+            const latest = [...scoped].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
+            setDerivedAgentStatuses(buildDerivedStatuses(latest));
+            return;
+          }
+        } catch {
+          // Ignore local fallback parse issues.
+        }
+      }
+
+      setDerivedAgentStatuses(null);
+    };
+
+    void loadStatuses();
+    const interval = window.setInterval(() => {
+      void loadStatuses();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isClient, state.currentUser.email, state.currentUser.role]);
+
+  useEffect(() => {
+    if (!isClient) {
+      return;
+    }
+
+    const loadSystemMetrics = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/applications/system-metrics`);
+        if (!response.ok) {
+          return;
+        }
+        const payload = await response.json();
+        const load = Number(payload?.system_load_percent);
+        const label = String(payload?.health_label || 'Healthy');
+        if (!Number.isNaN(load)) {
+          setSystemMetrics({
+            system_load_percent: Math.max(0, Math.min(100, load)),
+            health_label: label,
+          });
+        }
+      } catch {
+        // Keep previous or fallback value on transient API errors.
+      }
+    };
+
+    void loadSystemMetrics();
+    const interval = window.setInterval(() => {
+      void loadSystemMetrics();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isClient]);
+
+  const loadPercent = systemMetrics?.system_load_percent ?? 34;
+  const loadLabel = systemMetrics?.health_label ?? 'Healthy';
+
+  const effectiveStatuses = derivedAgentStatuses || state.agentStatuses;
+
   const liveAgentStatuses = {
     compliance: {
       ...mockAgentStatuses.compliance,
-      status: state.agentStatuses.kyc.status,
-      lastRun: state.agentStatuses.kyc.lastRun,
-      findings: state.agentStatuses.kyc.findings,
-      completionPercent: state.agentStatuses.kyc.completionPercent ?? (state.agentStatuses.kyc.status === 'complete' ? 100 : 40),
+      status: getNormalizedStatus(effectiveStatuses.kyc.status),
+      lastRun: getSafeLastRun(effectiveStatuses.kyc.lastRun, mockAgentStatuses.compliance.lastRun),
+      findings: effectiveStatuses.kyc.findings || mockAgentStatuses.compliance.findings,
+      completionPercent: effectiveStatuses.kyc.completionPercent ?? (effectiveStatuses.kyc.status === 'complete' ? 100 : effectiveStatuses.kyc.status === 'running' ? 40 : 0),
     },
     financial: {
       ...mockAgentStatuses.financial,
-      status: state.agentStatuses.financial.status,
-      lastRun: state.agentStatuses.financial.lastRun,
-      findings: state.agentStatuses.financial.findings,
-      completionPercent: state.agentStatuses.financial.completionPercent ?? (state.agentStatuses.financial.status === 'complete' ? 100 : state.agentStatuses.financial.status === 'running' ? 65 : 0),
+      status: getNormalizedStatus(effectiveStatuses.financial.status),
+      lastRun: getSafeLastRun(effectiveStatuses.financial.lastRun, mockAgentStatuses.financial.lastRun),
+      findings: effectiveStatuses.financial.findings || mockAgentStatuses.financial.findings,
+      completionPercent: effectiveStatuses.financial.completionPercent ?? (effectiveStatuses.financial.status === 'complete' ? 100 : effectiveStatuses.financial.status === 'running' ? 65 : 0),
     },
     fraud: {
       ...mockAgentStatuses.fraud,
-      status: state.agentStatuses.fraud.status,
-      lastRun: state.agentStatuses.fraud.lastRun,
-      findings: state.agentStatuses.fraud.findings,
-      anomalyDetected: state.agentStatuses.fraud.anomalyDetected,
-      completionPercent: state.agentStatuses.fraud.completionPercent ?? (state.agentStatuses.fraud.status === 'complete' ? 100 : 0),
+      status: getNormalizedStatus(effectiveStatuses.fraud.status),
+      lastRun: getSafeLastRun(effectiveStatuses.fraud.lastRun, mockAgentStatuses.fraud.lastRun),
+      findings: effectiveStatuses.fraud.findings || mockAgentStatuses.fraud.findings,
+      anomalyDetected: effectiveStatuses.fraud.anomalyDetected,
+      completionPercent: effectiveStatuses.fraud.completionPercent ?? (effectiveStatuses.fraud.status === 'complete' ? 100 : 0),
     },
     decision: {
       ...mockAgentStatuses.decision,
-      status: state.agentStatuses.decision.status,
-      lastRun: state.agentStatuses.decision.lastRun,
-      findings: state.agentStatuses.decision.findings,
-      completionPercent: state.agentStatuses.decision.completionPercent ?? (state.agentStatuses.decision.status === 'complete' ? 100 : state.agentStatuses.decision.status === 'running' ? 70 : 0),
+      status: getNormalizedStatus(effectiveStatuses.decision.status),
+      lastRun: getSafeLastRun(effectiveStatuses.decision.lastRun, mockAgentStatuses.decision.lastRun),
+      findings: effectiveStatuses.decision.findings || mockAgentStatuses.decision.findings,
+      completionPercent: effectiveStatuses.decision.completionPercent ?? (effectiveStatuses.decision.status === 'complete' ? 100 : effectiveStatuses.decision.status === 'running' ? 70 : 0),
     },
   };
 
@@ -328,10 +532,10 @@ export default function AgentsPage() {
               System Load
             </p>
             <p className="text-3xl font-bold" style={{ color: '#F1F5F9' }}>
-              34%
+              {loadPercent}%
             </p>
             <p style={{ color: '#64748B' }} className="text-xs mt-2">
-              Healthy
+              {loadLabel}
             </p>
           </div>
 

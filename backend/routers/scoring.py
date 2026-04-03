@@ -9,15 +9,23 @@ from schemas.models import (
     ExtractionResponse,
     GstinScoreRequest,
     GstinScoreResponse,
+    ApplicationSubmitRequest,
+    ApplicationSubmitResponse,
+    ApplicationListResponse,
+    ApplicationAcceptRequest,
+    ApplicationAcceptResponse,
+    ManagerDashboardResponse,
 )
 from services.scoring_engine import ScoringEngine
 from services.document_extractor import MockDocumentExtractor
 from services.gstin_scoring_service import GstinScoringService
+from services.application_assignment_service import ApplicationAssignmentService
 
 router = APIRouter()
 engine = ScoringEngine()
 extractor = MockDocumentExtractor()
 gstin_scoring_service = GstinScoringService()
+assignment_service = ApplicationAssignmentService()
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -104,3 +112,80 @@ def gstin_score(request: GstinScoreRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GSTIN scoring failed: {str(e)}")
+
+
+@router.post("/applications/submit", response_model=ApplicationSubmitResponse)
+def submit_application(request: ApplicationSubmitRequest):
+    """Persist borrower application and assign/reuse manager mapping."""
+    try:
+        application = assignment_service.submit_application(request.dict())
+        return {"application": application}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Application submission failed: {str(e)}")
+
+
+@router.get("/applications/manager/{manager_email}", response_model=ApplicationListResponse)
+def get_manager_applications(manager_email: str):
+    """Fetch only applications assigned to this manager email."""
+    try:
+        applications = assignment_service.get_manager_applications(manager_email)
+        return {"applications": applications}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Manager application fetch failed: {str(e)}")
+
+
+@router.get("/applications/manager/{manager_email}/dashboard", response_model=ManagerDashboardResponse)
+def get_manager_dashboard_applications(manager_email: str):
+    """Fetch manager applications enriched with normalized backend scoring summary."""
+    try:
+        applications = assignment_service.get_manager_dashboard_applications(manager_email)
+        return {"applications": applications}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Manager dashboard fetch failed: {str(e)}")
+
+
+@router.get("/applications/borrower/{borrower_email}", response_model=ApplicationListResponse)
+def get_borrower_applications(borrower_email: str):
+    """Fetch only applications submitted by this borrower email."""
+    try:
+        applications = assignment_service.get_borrower_applications(borrower_email)
+        return {"applications": applications}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Borrower application fetch failed: {str(e)}")
+
+
+@router.get("/applications/pending", response_model=ApplicationListResponse)
+def get_pending_applications():
+    """Fetch pending borrower requests visible to all managers."""
+    try:
+        applications = assignment_service.get_pending_applications()
+        return {"applications": applications}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pending application fetch failed: {str(e)}")
+
+
+@router.get("/applications/system-metrics")
+def get_system_metrics():
+    """Return lightweight runtime metrics for dashboard widgets."""
+    try:
+        return assignment_service.get_system_metrics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"System metrics fetch failed: {str(e)}")
+
+
+@router.post("/applications/accept/{application_id}", response_model=ApplicationAcceptResponse)
+def accept_application(application_id: str, request: ApplicationAcceptRequest):
+    """Manager accepts a pending request and becomes the owner of full process."""
+    try:
+        application = assignment_service.accept_application(
+            application_id=application_id,
+            manager_email=request.manager_email,
+            manager_name=request.manager_name,
+        )
+        return {"application": application}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Application accept failed: {str(e)}")

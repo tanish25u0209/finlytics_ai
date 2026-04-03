@@ -7,6 +7,84 @@ import {
   CheckCircle2, Zap, Lock, Download, Send, Database
 } from 'lucide-react';
 
+const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+
+type StoredAssignedApplication = {
+  id: string;
+  borrowerEmail: string;
+  borrowerName: string;
+  managerEmail: string | null;
+  managerName: string | null;
+  companyName: string;
+  loanAmount: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  currentStage: string;
+  credibilityScore: number;
+  createdAt: string;
+  updatedAt: string;
+  assignmentStatus?: 'pending' | 'accepted';
+  acceptedAt?: string | null;
+  backendScoring?: Record<string, unknown>;
+  documents?: Array<Record<string, unknown>>;
+};
+
+type ManagerApplicationCard = {
+  id: string;
+  borrowerEmail?: string;
+  borrowerName?: string;
+  managerEmail?: string | null;
+  managerName?: string | null;
+  assignmentStatus?: 'pending' | 'accepted';
+  acceptedAt?: string | null;
+  createdAt?: string;
+  companyName: string;
+  loanAmount: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  currentStage: string;
+  credibilityScore: number;
+  updatedAt?: string;
+  scoringSummary?: {
+    pd?: number;
+    final_score?: number;
+    decision?: string;
+    risk_category?: string;
+    credit_score?: number;
+    risk_band?: string;
+    probability_of_default?: number;
+    recommended_loan_amount?: number;
+    recommended_tenure_months?: number;
+    top_reasons?: string[];
+    document_count?: number;
+  };
+  tabAnalysis?: {
+    narrativeSource?: string;
+    credibility?: { score?: number; reasoning?: string[] };
+    financial?: {
+      ebitda?: { current?: number; trend?: number[] };
+      dscr?: { current?: number; trend?: number[] };
+      currentRatio?: { current?: number; trend?: number[] };
+      reasoning?: string[];
+    };
+    industry?: {
+      sector?: string;
+      marketSize?: string;
+      growthRate?: string;
+      competitiveBenchmark?: string;
+      reasoning?: string[];
+    };
+    siteReview?: { visitDate?: string; findings?: string[] };
+    risk?: {
+      probabilityOfDefault?: number;
+      keyRisks?: string[];
+      collateralValue?: number;
+      loanAmount?: number;
+    };
+  };
+  backendScoring?: Record<string, unknown>;
+  documents?: Array<Record<string, unknown>>;
+};
+
 // Mock data for multiple applications
 const mockApplications = [
   {
@@ -407,16 +485,225 @@ export default function ManagerPage() {
   const [documentView, setDocumentView] = useState('raw');
   const [showCAMModal, setShowCAMModal] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [assignedApplications, setAssignedApplications] = useState<ManagerApplicationCard[]>([]);
+  const [pendingApplications, setPendingApplications] = useState<ManagerApplicationCard[]>([]);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const backendScoring = state.formData.backendScoring || {};
+  useEffect(() => {
+    if (!isClient) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setRefreshTick((value) => value + 1);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isClient]);
+
+  useEffect(() => {
+    if (!isClient || typeof window === 'undefined') {
+      return;
+    }
+
+    const mapScopedApplications = (records: StoredAssignedApplication[]): ManagerApplicationCard[] =>
+      records.map((app) => ({
+        id: app.id,
+        borrowerEmail: app.borrowerEmail,
+        borrowerName: app.borrowerName,
+        managerEmail: app.managerEmail,
+        managerName: app.managerName,
+        assignmentStatus: app.assignmentStatus,
+        acceptedAt: app.acceptedAt,
+        createdAt: app.createdAt,
+        companyName: app.companyName,
+        loanAmount: Number(app.loanAmount || 0),
+        riskLevel: app.riskLevel || 'medium',
+        currentStage: app.currentStage || 'submitted',
+        credibilityScore: Number(app.credibilityScore || 0),
+        updatedAt: app.updatedAt,
+        scoringSummary: (app as any).scoringSummary,
+        tabAnalysis: (app as any).tabAnalysis,
+        backendScoring: app.backendScoring,
+        documents: app.documents,
+      }));
+
+    const loadApplications = async () => {
+      const managerEmail = state.currentUser.email?.toLowerCase();
+
+      try {
+        const pendingResponsePromise = fetch(`${API_BASE_URL}/applications/pending`);
+        const assignedResponsePromise = managerEmail
+          ? fetch(`${API_BASE_URL}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`)
+          : Promise.resolve(null);
+
+        const [assignedResponse, pendingResponse] = await Promise.all([
+          assignedResponsePromise,
+          pendingResponsePromise,
+        ]);
+
+        if ((assignedResponse === null || assignedResponse.ok) && pendingResponse.ok) {
+          const [assignedData, pendingData] = await Promise.all([
+            assignedResponse ? assignedResponse.json() : Promise.resolve({ applications: [] }),
+            pendingResponse.json(),
+          ]);
+          const serverAssigned = mapScopedApplications((assignedData?.applications || []) as StoredAssignedApplication[]);
+          const serverPending = mapScopedApplications((pendingData?.applications || []) as StoredAssignedApplication[]);
+
+          setAssignedApplications(serverAssigned);
+          setPendingApplications(serverPending);
+
+          if (serverAssigned.length && !serverAssigned.find((app) => app.id === selectedAppId)) {
+            setSelectedAppId(serverAssigned[0].id);
+          }
+          return;
+        }
+      } catch {
+        // Fallback to local assignment records for offline/demo scenarios.
+      }
+
+      try {
+        const raw = window.localStorage.getItem(APPLICATION_ASSIGNMENTS_KEY);
+        const allApplications = raw ? (JSON.parse(raw) as StoredAssignedApplication[]) : [];
+        const scopedApplications = managerEmail
+          ? mapScopedApplications(
+              allApplications.filter((app) => (app.managerEmail || '').toLowerCase() === managerEmail),
+            )
+          : [];
+        const localPendingApplications = mapScopedApplications(
+          allApplications.filter(
+            (app) => app.assignmentStatus === 'pending' || (!app.managerEmail && app.assignmentStatus !== 'accepted'),
+          ),
+        );
+        setAssignedApplications(scopedApplications);
+        setPendingApplications(localPendingApplications);
+        if (scopedApplications.length && !scopedApplications.find((app) => app.id === selectedAppId)) {
+          setSelectedAppId(scopedApplications[0].id);
+        }
+      } catch {
+        setAssignedApplications([]);
+        setPendingApplications([]);
+      }
+    };
+
+    void loadApplications();
+  }, [isClient, state.currentUser.email, refreshTick]);
+
+  const handleAcceptRequest = async (applicationId: string) => {
+    const managerEmail = state.currentUser.email?.toLowerCase();
+    if (!managerEmail || acceptingId) {
+      return;
+    }
+
+    setAcceptingId(applicationId);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/applications/accept/${encodeURIComponent(applicationId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          manager_email: managerEmail,
+          manager_name: state.currentUser.name || 'Credit Manager',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('accept_failed');
+      }
+
+      const assignedResponse = await fetch(`${API_BASE_URL}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`);
+      const pendingResponse = await fetch(`${API_BASE_URL}/applications/pending`);
+
+      if (assignedResponse.ok && pendingResponse.ok) {
+        const [assignedData, pendingData] = await Promise.all([
+          assignedResponse.json(),
+          pendingResponse.json(),
+        ]);
+
+        const mapScopedApplications = (records: StoredAssignedApplication[]): ManagerApplicationCard[] =>
+          records.map((app) => ({
+            id: app.id,
+            borrowerEmail: app.borrowerEmail,
+            borrowerName: app.borrowerName,
+            managerEmail: app.managerEmail,
+            managerName: app.managerName,
+            assignmentStatus: app.assignmentStatus,
+            acceptedAt: app.acceptedAt,
+            createdAt: app.createdAt,
+            companyName: app.companyName,
+            loanAmount: Number(app.loanAmount || 0),
+            riskLevel: app.riskLevel || 'medium',
+            currentStage: app.currentStage || 'submitted',
+            credibilityScore: Number(app.credibilityScore || 0),
+            updatedAt: app.updatedAt,
+            scoringSummary: (app as any).scoringSummary,
+            tabAnalysis: (app as any).tabAnalysis,
+            backendScoring: app.backendScoring,
+            documents: app.documents,
+          }));
+
+        const serverAssigned = mapScopedApplications((assignedData?.applications || []) as StoredAssignedApplication[]);
+        const serverPending = mapScopedApplications((pendingData?.applications || []) as StoredAssignedApplication[]);
+
+        setAssignedApplications(serverAssigned);
+        setPendingApplications(serverPending);
+      }
+
+      setSelectedAppId(applicationId);
+    } catch {
+      // Ignore and keep existing list if accept fails.
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  const selectedAssignedApplication = assignedApplications.find((app) => app.id === selectedAppId);
+  const backendScoring = selectedAssignedApplication?.backendScoring || state.formData.backendScoring || {};
+  const scoringSummary = selectedAssignedApplication?.scoringSummary || {};
   const gstinResult = backendScoring.gstinResult;
   const scoreResult = backendScoring.scoreResult;
   const extractedPayload = backendScoring.extractedPayload || {};
   const processedDocuments = backendScoring.processedDocuments || [];
+  const scoreOutput = scoreResult as {
+    rule_score?: number;
+    pd?: number;
+    final_score?: number;
+    risk_category?: string;
+    decision?: string;
+  } | undefined;
+  const gstinOutput = gstinResult as {
+    credit_score?: number;
+    risk_band?: string;
+    probability_of_default?: number;
+    recommended_loan_amount?: number;
+    recommended_tenure_months?: number;
+    top_reasons?: string[];
+  } | undefined;
+
+  const resolvedScoreOutput = {
+    pd: scoringSummary.pd ?? scoreOutput?.pd,
+    final_score: scoringSummary.final_score ?? scoreOutput?.final_score,
+    decision: scoringSummary.decision ?? scoreOutput?.decision,
+    risk_category: scoringSummary.risk_category ?? scoreOutput?.risk_category,
+  };
+
+  const resolvedGstinOutput = {
+    credit_score: scoringSummary.credit_score ?? gstinOutput?.credit_score,
+    risk_band: scoringSummary.risk_band ?? gstinOutput?.risk_band,
+    probability_of_default: scoringSummary.probability_of_default ?? gstinOutput?.probability_of_default,
+    recommended_loan_amount: scoringSummary.recommended_loan_amount ?? gstinOutput?.recommended_loan_amount,
+    recommended_tenure_months: scoringSummary.recommended_tenure_months ?? gstinOutput?.recommended_tenure_months,
+    top_reasons: scoringSummary.top_reasons || gstinOutput?.top_reasons || [],
+  };
 
   useEffect(() => {
     if (state.applicationState.applicationId) {
@@ -443,16 +730,73 @@ export default function ManagerPage() {
       }
     : null;
 
-  const applications = liveApplication ? [liveApplication] : [];
+  const applications = assignedApplications.length
+    ? assignedApplications
+    : liveApplication
+      ? [liveApplication]
+      : [];
   const selectedApp = applications.find((app) => app.id === selectedAppId) || liveApplication;
 
   const monthlyRevenue = Number(extractedPayload.monthly_revenue || 0);
+  const totalDebt = Number(extractedPayload.total_debt || 0);
+  const monthlyEmi = Number(extractedPayload.monthly_emi || 0);
+  const businessAgeMonths = Number(extractedPayload.business_age_months || 0);
+  const businessAgeYears = businessAgeMonths > 0 ? businessAgeMonths / 12 : 0;
+  const gstCompliant = Boolean(extractedPayload.gst_compliant);
+  const hasDisputes = Boolean(extractedPayload.has_disputes);
   const recommendedLoan = Number(gstinResult?.recommended_loan_amount || state.applicationState.loanAmount || 0);
   const baseProfit = monthlyRevenue > 0 ? monthlyRevenue * 0.22 : 0;
-  const aiAnalysis = {
+  const dscrCurrent = scoreResult ? Number((1.1 + Math.max(scoreResult.final_score - 50, 0) / 40).toFixed(1)) : 0;
+  const currentRatioCurrent = totalDebt && monthlyRevenue
+    ? Number((1.2 + monthlyRevenue / Math.max(totalDebt, 1) / 2).toFixed(1))
+    : 0;
+  const topReasonList = (resolvedGstinOutput.top_reasons || []).filter(Boolean);
+  const profileLabel = selectedAssignedApplication?.companyName || liveApplication?.companyName || 'the business';
+
+  const fallbackCredibilityReasoning = [
+    `${profileLabel} shows a business vintage of ${businessAgeYears.toFixed(1)} years with current risk level tagged as ${(resolvedGstinOutput.risk_band || 'Awaiting scoring').toLowerCase()}.`,
+    `GST compliance is ${gstCompliant ? 'confirmed' : 'not confirmed'} and dispute history is ${hasDisputes ? 'present' : 'not indicated'} in extracted records.`,
+    topReasonList[0] || 'Primary model driver is pending because explainability reasons are currently limited for this application.',
+  ];
+
+  const debtToRevenueRatio = monthlyRevenue > 0 ? totalDebt / Math.max(monthlyRevenue * 12, 1) : 0;
+  const emiToRevenuePct = monthlyRevenue > 0 ? (monthlyEmi / Math.max(monthlyRevenue, 1)) * 100 : 0;
+  const fallbackFinancialReasoning = [
+    `Monthly revenue is estimated at ₹${monthlyRevenue.toLocaleString('en-IN')} with EMI load around ${emiToRevenuePct.toFixed(1)}% of monthly inflow.`,
+    `Coverage metrics indicate DSCR near ${dscrCurrent.toFixed(1)}x and current ratio near ${currentRatioCurrent.toFixed(1)}x for this case.`,
+    `Debt to annualized revenue is ${debtToRevenueRatio.toFixed(2)}, suggesting ${debtToRevenueRatio < 0.7 ? 'moderate' : 'elevated'} leverage pressure.`,
+  ];
+
+  const fallbackIndustryReasoning = [
+    `${profileLabel} is currently benchmarked against ${(resolvedGstinOutput.risk_band || 'unrated').toLowerCase()} profile peers in the alternative-signal scoring set.`,
+    topReasonList[1] || 'Sector confidence remains moderate until richer transaction telemetry is available for this application.',
+    `Competitive stance is assessed as ${resolvedGstinOutput.risk_band ? `${resolvedGstinOutput.risk_band.toLowerCase()} segment behavior` : 'awaiting benchmark update'}.`,
+  ];
+
+  const fallbackSiteFindings = processedDocuments.length
+    ? [
+        `Underwriting review includes ${processedDocuments.length} processed documents for ${profileLabel}.`,
+        `Key document coverage includes ${processedDocuments
+          .slice(0, 3)
+          .map((doc: { document_type?: string }) => doc.document_type || 'document')
+          .join(', ')}.`,
+        `Latest review timestamp is ${selectedAssignedApplication?.updatedAt || state.applicationState.lastUpdated || 'not available'}.`,
+      ]
+    : [
+        `No processed document summaries are available yet for ${profileLabel}.`,
+        'Site review narrative will improve after extraction and verification stages complete.',
+      ];
+
+  const fallbackRiskItems = [
+    `Probability of default is ${(Number(resolvedGstinOutput.probability_of_default || 0) * 100).toFixed(1)}% for the current application snapshot.`,
+    topReasonList[2] || 'Key model risk drivers are currently sparse and should be reviewed manually.',
+    `Collateral cover is estimated at ${recommendedLoan ? (Math.round(recommendedLoan * 1.4) / Math.max(recommendedLoan, 1)).toFixed(1) : '0.0'}x against the recommended loan amount.`,
+  ];
+
+  const computedAnalysis = {
     credibility: {
-      score: liveApplication?.credibilityScore || 0,
-      reasoning: gstinResult?.top_reasons || [],
+      score: Math.round(Number(resolvedScoreOutput.final_score || selectedAssignedApplication?.credibilityScore || liveApplication?.credibilityScore || 0)),
+      reasoning: topReasonList.length ? topReasonList : fallbackCredibilityReasoning,
     },
     financial: {
       ebitda: {
@@ -462,45 +806,112 @@ export default function ManagerPage() {
           : [],
       },
       dscr: {
-        current: scoreResult ? Number((1.1 + Math.max(scoreResult.final_score - 50, 0) / 40).toFixed(1)) : 0,
+        current: dscrCurrent,
         trend: scoreResult ? [0.9, 1.0, 1.15, 1.25, 1.35].map((factor) => Number((factor + Math.max(scoreResult.final_score - 60, 0) / 100).toFixed(1))) : [],
       },
       currentRatio: {
-        current: extractedPayload.total_debt && monthlyRevenue
-          ? Number((1.2 + monthlyRevenue / Math.max(Number(extractedPayload.total_debt), 1) / 2).toFixed(1))
-          : 0,
-        trend: extractedPayload.total_debt && monthlyRevenue
-          ? [0.82, 0.9, 0.95, 1.0, 1.08].map((factor) => Number(((1.2 + monthlyRevenue / Math.max(Number(extractedPayload.total_debt), 1) / 2) * factor).toFixed(1)))
+        current: currentRatioCurrent,
+        trend: totalDebt && monthlyRevenue
+          ? [0.82, 0.9, 0.95, 1.0, 1.08].map((factor) => Number(((1.2 + monthlyRevenue / Math.max(totalDebt, 1) / 2) * factor).toFixed(1)))
           : [],
       },
+      reasoning: fallbackFinancialReasoning,
     },
     industry: {
       sector: gstinResult ? 'MSME Alternative Signal Profile' : 'No sector data yet',
       marketSize: gstinResult ? 'Mocked live GST + UPI + e-way signal universe' : 'Awaiting scoring input',
-      growthRate: gstinResult?.risk_band || 'Awaiting scoring',
-      competitiveBenchmark: gstinResult ? `${gstinResult.risk_band} segment` : 'Awaiting benchmark',
-      reasoning: gstinResult?.top_reasons || [],
+      growthRate: resolvedGstinOutput.risk_band || 'Awaiting scoring',
+      competitiveBenchmark: resolvedGstinOutput.risk_band ? `${resolvedGstinOutput.risk_band} segment` : 'Awaiting benchmark',
+      reasoning: topReasonList.length ? topReasonList : fallbackIndustryReasoning,
     },
     siteReview: {
-      visitDate: state.applicationState.lastUpdated || '',
-      findings: processedDocuments.length
-        ? processedDocuments.map((doc: { source_document: string; document_type: string }) => `Processed ${doc.document_type} document: ${doc.source_document}`)
-        : [],
+      visitDate: selectedAssignedApplication?.updatedAt || state.applicationState.lastUpdated || '',
+      findings: fallbackSiteFindings,
     },
     risk: {
-      probabilityOfDefault: Math.round((gstinResult?.probability_of_default || 0) * 100),
+      probabilityOfDefault: Math.round((resolvedGstinOutput.probability_of_default || 0) * 100),
       keyRisks: gstinResult
         ? [
             ...(gstinResult.fraud_flag ? [gstinResult.fraud_summary] : []),
-            ...gstinResult.top_reasons.slice(0, 3),
+            ...(resolvedGstinOutput.top_reasons || []).slice(0, 3),
           ]
-        : [],
+        : fallbackRiskItems,
       collateralValue: Math.round(recommendedLoan * 1.4),
       loanAmount: recommendedLoan,
     },
   };
-  const rawDocuments = state.documents.length
-    ? state.documents.map((doc) => ({
+  const aiAnalysis = (() => {
+    const base = selectedAssignedApplication?.tabAnalysis || computedAnalysis;
+
+    const baseCredibilityReasoning = Array.isArray(base?.credibility?.reasoning)
+      ? base.credibility.reasoning.filter(Boolean)
+      : [];
+    const baseIndustryReasoning = Array.isArray(base?.industry?.reasoning)
+      ? base.industry.reasoning.filter(Boolean)
+      : [];
+    const baseSiteFindings = Array.isArray(base?.siteReview?.findings)
+      ? base.siteReview.findings.filter(Boolean)
+      : [];
+    const baseRiskItems = Array.isArray(base?.risk?.keyRisks)
+      ? base.risk.keyRisks.filter(Boolean)
+      : [];
+
+    const fallbackLoanAmount = Number(selectedAssignedApplication?.loanAmount || liveApplication?.loanAmount || mockAIAnalysis.risk.loanAmount || 500000);
+    const fallbackCollateral = Math.round(fallbackLoanAmount * 1.4);
+
+    return {
+      credibility: {
+        score: Number(base?.credibility?.score || computedAnalysis.credibility.score || 0),
+        reasoning: baseCredibilityReasoning.length ? baseCredibilityReasoning : computedAnalysis.credibility.reasoning,
+      },
+      financial: {
+        ebitda: {
+          current: Number(base?.financial?.ebitda?.current || computedAnalysis.financial.ebitda.current || mockAIAnalysis.financial.ebitda.current),
+          trend: Array.isArray(base?.financial?.ebitda?.trend) && base.financial.ebitda.trend.length
+            ? base.financial.ebitda.trend
+            : (computedAnalysis.financial.ebitda.trend.length ? computedAnalysis.financial.ebitda.trend : mockAIAnalysis.financial.ebitda.trend),
+        },
+        dscr: {
+          current: Number(base?.financial?.dscr?.current || computedAnalysis.financial.dscr.current || mockAIAnalysis.financial.dscr.current),
+          trend: Array.isArray(base?.financial?.dscr?.trend) && base.financial.dscr.trend.length
+            ? base.financial.dscr.trend
+            : (computedAnalysis.financial.dscr.trend.length ? computedAnalysis.financial.dscr.trend : mockAIAnalysis.financial.dscr.trend),
+        },
+        currentRatio: {
+          current: Number(base?.financial?.currentRatio?.current || computedAnalysis.financial.currentRatio.current || mockAIAnalysis.financial.currentRatio.current),
+          trend: Array.isArray(base?.financial?.currentRatio?.trend) && base.financial.currentRatio.trend.length
+            ? base.financial.currentRatio.trend
+            : (computedAnalysis.financial.currentRatio.trend.length ? computedAnalysis.financial.currentRatio.trend : mockAIAnalysis.financial.currentRatio.trend),
+        },
+        reasoning: Array.isArray(base?.financial?.reasoning) && base.financial.reasoning.length
+          ? base.financial.reasoning.filter(Boolean)
+          : computedAnalysis.financial.reasoning,
+      },
+      industry: {
+        sector: base?.industry?.sector || computedAnalysis.industry.sector || mockAIAnalysis.industry.sector,
+        marketSize: base?.industry?.marketSize || computedAnalysis.industry.marketSize || mockAIAnalysis.industry.marketSize,
+        growthRate: base?.industry?.growthRate || computedAnalysis.industry.growthRate || mockAIAnalysis.industry.growthRate,
+        competitiveBenchmark: base?.industry?.competitiveBenchmark || computedAnalysis.industry.competitiveBenchmark || mockAIAnalysis.industry.competitiveBenchmark,
+        reasoning: baseIndustryReasoning.length ? baseIndustryReasoning : computedAnalysis.industry.reasoning,
+      },
+      siteReview: {
+        visitDate: base?.siteReview?.visitDate || computedAnalysis.siteReview.visitDate || new Date().toISOString(),
+        findings: baseSiteFindings.length ? baseSiteFindings : computedAnalysis.siteReview.findings,
+      },
+      risk: {
+        probabilityOfDefault: Number(base?.risk?.probabilityOfDefault || computedAnalysis.risk.probabilityOfDefault || mockAIAnalysis.risk.probabilityOfDefault),
+        keyRisks: baseRiskItems.length ? baseRiskItems : computedAnalysis.risk.keyRisks,
+        collateralValue: Number(base?.risk?.collateralValue || computedAnalysis.risk.collateralValue || fallbackCollateral),
+        loanAmount: Number(base?.risk?.loanAmount || computedAnalysis.risk.loanAmount || fallbackLoanAmount),
+      },
+    };
+  })();
+  const sourceDocuments = selectedAssignedApplication?.documents && selectedAssignedApplication.documents.length
+    ? selectedAssignedApplication.documents
+    : state.documents;
+
+  const rawDocuments = sourceDocuments.length
+    ? sourceDocuments.map((doc: any) => ({
         name: doc.name,
         pages: 1,
       }))
@@ -511,12 +922,58 @@ export default function ManagerPage() {
         gstin: gstinResult.gstin,
         credit_score: gstinResult.credit_score,
         risk_band: gstinResult.risk_band,
+        risk_score: gstinResult.risk_score,
+        probability_of_default: gstinResult.probability_of_default,
+        risk_category: gstinResult.risk_category,
         recommended_loan_amount: gstinResult.recommended_loan_amount,
         recommended_tenure_months: gstinResult.recommended_tenure_months,
         top_reasons: gstinResult.top_reasons,
+        score_result: scoreResult || null,
+        extracted_payload: extractedPayload || null,
         documents: processedDocuments,
       }
+    : {
+        score_result: scoreResult || null,
+        extracted_payload: extractedPayload || null,
+        backend_scoring: backendScoring || null,
+        documents: processedDocuments,
+      };
+
+  const selectedApplicationReport = selectedAssignedApplication
+    ? {
+        application: {
+          id: selectedAssignedApplication.id,
+          borrower_name: selectedAssignedApplication.borrowerName || 'N/A',
+          borrower_email: selectedAssignedApplication.borrowerEmail || 'N/A',
+          company_name: selectedAssignedApplication.companyName,
+          manager_name: selectedAssignedApplication.managerName || 'N/A',
+          manager_email: selectedAssignedApplication.managerEmail || 'N/A',
+          assignment_status: selectedAssignedApplication.assignmentStatus || 'accepted',
+          accepted_at: selectedAssignedApplication.acceptedAt || null,
+          created_at: selectedAssignedApplication.createdAt || null,
+          updated_at: selectedAssignedApplication.updatedAt || null,
+          current_stage: selectedAssignedApplication.currentStage,
+          risk_level: selectedAssignedApplication.riskLevel,
+          loan_amount: selectedAssignedApplication.loanAmount,
+        },
+        scoring_summary: selectedAssignedApplication.scoringSummary || null,
+        backend_scoring: backendScoring || null,
+        documents: sourceDocuments || [],
+      }
     : null;
+
+  const formatDateLabel = (value?: string | null) => {
+    if (!value) {
+      return 'N/A';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleString();
+  };
 
   const getRiskColor = (level) => {
     if (level === 'low') return '#2DD4A0';
@@ -537,6 +994,60 @@ export default function ManagerPage() {
         <h2 className="text-sm font-bold uppercase mb-4" style={{ color: '#D4A843' }}>
           Application Pipeline
         </h2>
+        <button
+          onClick={() => setRefreshTick((value) => value + 1)}
+          className="w-full mb-3 py-2 rounded-lg text-xs font-semibold transition-all hover:opacity-90"
+          style={{
+            backgroundColor: '#1E2A3A',
+            color: '#D4A843',
+            border: '1px solid #1E2A3A',
+          }}
+        >
+          Refresh Queue
+        </button>
+
+        {pendingApplications.length > 0 && (
+          <div className="mb-4 space-y-2">
+            <p className="text-xs font-semibold uppercase" style={{ color: '#64748B' }}>
+              Pending Requests
+            </p>
+            {pendingApplications.map((app) => (
+              <div
+                key={`pending-${app.id}`}
+                className="w-full p-3 rounded-lg border"
+                style={{
+                  backgroundColor: '#141929',
+                  borderColor: '#1E2A3A',
+                }}
+              >
+                <p style={{ color: '#F1F5F9' }} className="font-semibold text-sm truncate">
+                  {app.companyName}
+                </p>
+                <p style={{ color: '#D4A843' }} className="font-mono text-xs mt-1">
+                  ₹{(app.loanAmount / 100000).toFixed(1)}L
+                </p>
+                <button
+                  onClick={() => void handleAcceptRequest(app.id)}
+                  disabled={Boolean(acceptingId)}
+                  className="w-full mt-3 py-1.5 rounded text-xs font-semibold transition-all disabled:opacity-60"
+                  style={{
+                    backgroundColor: '#D4A843',
+                    color: '#0B0F1A',
+                  }}
+                >
+                  {acceptingId === app.id ? 'Accepting...' : 'Accept Request'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!pendingApplications.length && (
+          <p className="text-xs mb-4" style={{ color: '#64748B' }}>
+            No pending requests right now.
+          </p>
+        )}
+
         {applications.map((app) => (
           <button
             key={app.id}
@@ -605,8 +1116,137 @@ export default function ManagerPage() {
 
         {/* Content */}
         <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+          {selectedApplicationReport && (
+            <div
+              className="rounded-lg p-4 animate-in fade-in duration-300"
+              style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p style={{ color: '#64748B' }} className="text-xs uppercase">
+                  Accepted Application Report
+                </p>
+                <p style={{ color: '#D4A843' }} className="text-xs font-mono">
+                  {selectedAssignedApplication?.id}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <p style={{ color: '#64748B' }} className="text-xs">Borrower</p>
+                  <p style={{ color: '#F1F5F9' }} className="text-sm font-semibold truncate">
+                    {selectedAssignedApplication?.borrowerName || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ color: '#64748B' }} className="text-xs">Manager</p>
+                  <p style={{ color: '#F1F5F9' }} className="text-sm font-semibold truncate">
+                    {selectedAssignedApplication?.managerName || state.currentUser.name || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ color: '#64748B' }} className="text-xs">Status</p>
+                  <p style={{ color: '#2DD4A0' }} className="text-sm font-semibold uppercase">
+                    {selectedAssignedApplication?.assignmentStatus || 'accepted'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ color: '#64748B' }} className="text-xs">Documents</p>
+                  <p style={{ color: '#F1F5F9' }} className="text-sm font-semibold">
+                    {sourceDocuments.length}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded p-3" style={{ backgroundColor: '#0B0F1A', border: '1px solid #1E2A3A' }}>
+                  <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">Application Details</p>
+                  <div className="space-y-1 text-xs">
+                    <p style={{ color: '#F1F5F9' }}>Borrower Email: {selectedApplicationReport.application.borrower_email}</p>
+                    <p style={{ color: '#F1F5F9' }}>Manager Email: {selectedApplicationReport.application.manager_email}</p>
+                    <p style={{ color: '#F1F5F9' }}>Stage: {selectedApplicationReport.application.current_stage}</p>
+                    <p style={{ color: '#F1F5F9' }}>Loan: ₹{Number(selectedApplicationReport.application.loan_amount || 0).toLocaleString('en-IN')}</p>
+                    <p style={{ color: '#F1F5F9' }}>Accepted At: {formatDateLabel(selectedApplicationReport.application.accepted_at)}</p>
+                  </div>
+                </div>
+                <div className="rounded p-3" style={{ backgroundColor: '#0B0F1A', border: '1px solid #1E2A3A' }}>
+                  <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">Scoring Snapshot</p>
+                  <div className="space-y-1 text-xs">
+                    <p style={{ color: '#F1F5F9' }}>PD: {selectedApplicationReport.scoring_summary?.pd !== undefined ? `${(Number(selectedApplicationReport.scoring_summary.pd) * 100).toFixed(2)}%` : '--'}</p>
+                    <p style={{ color: '#F1F5F9' }}>Final Score: {selectedApplicationReport.scoring_summary?.final_score !== undefined ? Number(selectedApplicationReport.scoring_summary.final_score).toFixed(2) : '--'}</p>
+                    <p style={{ color: '#F1F5F9' }}>Decision: {selectedApplicationReport.scoring_summary?.decision || '--'}</p>
+                    <p style={{ color: '#F1F5F9' }}>Risk: {selectedApplicationReport.scoring_summary?.risk_category || '--'}</p>
+                    <p style={{ color: '#F1F5F9' }}>Credit Score: {selectedApplicationReport.scoring_summary?.credit_score ?? '--'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'credibility' && (
             <div>
+              {(resolvedScoreOutput.final_score !== undefined || resolvedGstinOutput.credit_score !== undefined) && (
+                <div
+                  className="rounded-lg p-4 mb-4 animate-in fade-in duration-300"
+                  style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
+                >
+                  <p style={{ color: '#64748B' }} className="text-xs uppercase mb-3">
+                    Backend Scoring Output
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">Final Score</p>
+                      <p style={{ color: '#D4A843' }} className="font-mono font-bold">
+                        {resolvedScoreOutput.final_score !== undefined ? Number(resolvedScoreOutput.final_score).toFixed(2) : '--'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">PD</p>
+                      <p style={{ color: '#F1F5F9' }} className="font-mono font-bold">
+                        {resolvedScoreOutput.pd !== undefined ? `${(Number(resolvedScoreOutput.pd) * 100).toFixed(2)}%` : '--'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">Decision</p>
+                      <p style={{ color: '#2DD4A0' }} className="font-semibold">
+                        {resolvedScoreOutput.decision || '--'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">Risk Category</p>
+                      <p style={{ color: '#F59E0B' }} className="font-semibold">
+                        {resolvedScoreOutput.risk_category || '--'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">Credit Score</p>
+                      <p style={{ color: '#F1F5F9' }} className="font-mono font-bold">
+                        {resolvedGstinOutput.credit_score !== undefined ? resolvedGstinOutput.credit_score : '--'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">Risk Band</p>
+                      <p style={{ color: '#F1F5F9' }} className="font-semibold">
+                        {resolvedGstinOutput.risk_band || '--'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">Recommended Loan</p>
+                      <p style={{ color: '#F1F5F9' }} className="font-mono font-bold">
+                        {resolvedGstinOutput.recommended_loan_amount !== undefined
+                          ? `₹${Number(resolvedGstinOutput.recommended_loan_amount).toLocaleString('en-IN')}`
+                          : '--'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#64748B' }} className="text-xs">Tenure</p>
+                      <p style={{ color: '#F1F5F9' }} className="font-mono font-bold">
+                        {resolvedGstinOutput.recommended_tenure_months !== undefined
+                          ? `${Number(resolvedGstinOutput.recommended_tenure_months)} months`
+                          : '--'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <div
                   className="rounded-lg p-4 col-span-3 animate-in fade-in duration-300"
@@ -667,12 +1307,7 @@ export default function ManagerPage() {
                 Financial Analysis Chain of Thought
               </h3>
               <div>
-                {[
-                  'Revenue growth: 18% CAGR over 3 years',
-                  'Net margin improved from 22% to 28%',
-                  'DSCR consistently above 1.5x threshold',
-                  'Working capital cycle: 45 days (healthy)',
-                ].map((step, idx) => (
+                {aiAnalysis.financial.reasoning.map((step, idx) => (
                   <ChainOfThoughtStep
                     key={idx}
                     step={step}
@@ -912,11 +1547,43 @@ export default function ManagerPage() {
           )}
 
           {documentView === 'processed' && (
-            <div
-              className="p-3 rounded-lg font-mono text-xs animate-in fade-in duration-300"
-              style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
-            >
-              <pre style={{ color: '#D4A843', overflowX: 'auto' }}>{JSON.stringify(processedDocumentPreview, null, 2)}</pre>
+            <div className="space-y-3 animate-in fade-in duration-300">
+              <div className="p-3 rounded-lg" style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}>
+                <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">Scoring Output</p>
+                <div className="grid grid-cols-1 gap-1 text-xs">
+                  <p style={{ color: '#F1F5F9' }}>PD: {resolvedScoreOutput.pd !== undefined ? `${(Number(resolvedScoreOutput.pd) * 100).toFixed(2)}%` : '--'}</p>
+                  <p style={{ color: '#F1F5F9' }}>Final Score: {resolvedScoreOutput.final_score !== undefined ? Number(resolvedScoreOutput.final_score).toFixed(2) : '--'}</p>
+                  <p style={{ color: '#F1F5F9' }}>Decision: {resolvedScoreOutput.decision || '--'}</p>
+                  <p style={{ color: '#F1F5F9' }}>Risk Category: {resolvedScoreOutput.risk_category || '--'}</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg" style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}>
+                <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">GSTIN and Recommendation</p>
+                <div className="grid grid-cols-1 gap-1 text-xs">
+                  <p style={{ color: '#F1F5F9' }}>Credit Score: {resolvedGstinOutput.credit_score ?? '--'}</p>
+                  <p style={{ color: '#F1F5F9' }}>Risk Band: {resolvedGstinOutput.risk_band || '--'}</p>
+                  <p style={{ color: '#F1F5F9' }}>Recommended Loan: {resolvedGstinOutput.recommended_loan_amount !== undefined ? `₹${Number(resolvedGstinOutput.recommended_loan_amount).toLocaleString('en-IN')}` : '--'}</p>
+                  <p style={{ color: '#F1F5F9' }}>Recommended Tenure: {resolvedGstinOutput.recommended_tenure_months !== undefined ? `${resolvedGstinOutput.recommended_tenure_months} months` : '--'}</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg" style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}>
+                <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">Top Reasons</p>
+                <div className="flex flex-wrap gap-2">
+                  {(resolvedGstinOutput.top_reasons || []).length ? (resolvedGstinOutput.top_reasons || []).map((reason, idx) => (
+                    <span
+                      key={idx}
+                      className="text-xs px-2 py-1 rounded-full"
+                      style={{ backgroundColor: '#1E2A3A', color: '#D4A843' }}
+                    >
+                      {reason}
+                    </span>
+                  )) : (
+                    <span className="text-xs" style={{ color: '#64748B' }}>No reasons available.</span>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
