@@ -10,12 +10,16 @@ import {
 const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
 const CHAT_STORAGE_KEY = 'finserv-aim-chat-messages';
+const API_BASE_CANDIDATES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
+const CHAT_API_BASES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
 
 type StoredChatMessage = {
   id: number;
   applicationId: string;
   senderRole: 'borrower' | 'manager';
   senderName: string;
+  borrowerEmail?: string;
+  companyName?: string;
   subject?: string;
   message: string;
   attachmentName?: string;
@@ -234,8 +238,11 @@ const ChainOfThoughtStep = ({ step, index, hash }) => {
 };
 
 const RiskGauge = ({ probabilityOfDefault }) => {
+  const pdValue = Number.isFinite(Number(probabilityOfDefault))
+    ? Math.max(0, Math.min(100, Number(probabilityOfDefault)))
+    : 0;
   const circumference = 2 * Math.PI * 45;
-  const strokeDashoffset = circumference - (probabilityOfDefault / 100) * circumference;
+  const strokeDashoffset = circumference - (pdValue / 100) * circumference;
 
   const getColor = (value) => {
     if (value < 20) return '#2DD4A0';
@@ -266,7 +273,7 @@ const RiskGauge = ({ probabilityOfDefault }) => {
             cy="80"
             r="45"
             fill="none"
-            stroke={getColor(probabilityOfDefault)}
+            stroke={getColor(pdValue)}
             strokeWidth="8"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -276,9 +283,9 @@ const RiskGauge = ({ probabilityOfDefault }) => {
         </svg>
         <p
           className="text-2xl font-bold font-mono mt--12"
-          style={{ color: getColor(probabilityOfDefault) }}
+          style={{ color: getColor(pdValue) }}
         >
-          {probabilityOfDefault}%
+          {pdValue}%
         </p>
       </div>
     </div>
@@ -286,8 +293,39 @@ const RiskGauge = ({ probabilityOfDefault }) => {
 };
 
 const FraudNetworkGraph = ({ network, fraudSummary }: { network?: FraudNetworkPayload; fraudSummary?: string }) => {
-  const nodes = network?.nodes || [];
-  const edges = network?.edges || [];
+  const rawNodes = Array.isArray(network?.nodes) ? network.nodes : [];
+  const rawEdges = Array.isArray(network?.edges) ? network.edges : [];
+
+  const nodes = rawNodes
+    .map((node) => {
+      const item = (node || {}) as Record<string, unknown>;
+      const id = String(item.id || item.gstin || '').trim();
+      if (!id) {
+        return null;
+      }
+      return {
+        id,
+        is_suspicious: Boolean(item.is_suspicious || item.in_cycle || item.role === 'ring_member'),
+      };
+    })
+    .filter((node): node is { id: string; is_suspicious: boolean } => Boolean(node));
+
+  const edges = rawEdges
+    .map((edge) => {
+      const item = (edge || {}) as Record<string, unknown>;
+      const from = String(item.from || item.from_gstin || '').trim();
+      const to = String(item.to || item.to_gstin || '').trim();
+      if (!from || !to) {
+        return null;
+      }
+      return {
+        from,
+        to,
+        is_cycle_edge: Boolean(item.is_cycle_edge || item.in_cycle),
+      };
+    })
+    .filter((edge): edge is { from: string; to: string; is_cycle_edge: boolean } => Boolean(edge));
+
   const cycleCount = Number(network?.cycle_count || 0);
   const hasGraph = nodes.length > 0;
   const size = 280;
@@ -399,12 +437,22 @@ const FraudNetworkGraph = ({ network, fraudSummary }: { network?: FraudNetworkPa
 };
 
 const SimpleSparkline = ({ data, color }) => {
-  const max = Math.max(...data);
-  const min = Math.min(...data);
+  const normalized = Array.isArray(data)
+    ? data.map((value) => Number(value)).filter((value) => Number.isFinite(value))
+    : [];
+
+  if (normalized.length < 2) {
+    return (
+      <div className="w-full h-8" style={{ borderTop: '1px dashed #1E2A3A' }} />
+    );
+  }
+
+  const max = Math.max(...normalized);
+  const min = Math.min(...normalized);
   const range = max - min || 1;
-  const points = data
+  const points = normalized
     .map((val, i) => {
-      const x = (i / (data.length - 1)) * 100;
+      const x = (i / (normalized.length - 1)) * 100;
       const y = ((max - val) / range) * 100;
       return `${x},${y}`;
     })
@@ -439,7 +487,7 @@ const MetricCard = ({ label, value, unit, trend, color }) => (
         {unit}
       </p>
     </div>
-    {trend && (
+    {Array.isArray(trend) && trend.length > 1 && (
       <div className="h-8">
         <SimpleSparkline data={trend} color={color || '#D4A843'} />
       </div>
@@ -659,6 +707,7 @@ export default function ManagerPage() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [chatMessages, setChatMessages] = useState<StoredChatMessage[]>([]);
   const [managerReply, setManagerReply] = useState('');
+  const [previewDoc, setPreviewDoc] = useState<{ name: string; pages: number; url: string } | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -707,36 +756,72 @@ export default function ManagerPage() {
 
     const loadApplications = async () => {
       const managerEmail = state.currentUser.email?.toLowerCase();
+      let bestAssigned: ManagerApplicationCard[] = [];
+      let bestPending: ManagerApplicationCard[] = [];
+      let bestScore = -1;
 
-      try {
-        const pendingResponsePromise = fetch(`${API_BASE_URL}/applications/pending`);
-        const assignedResponsePromise = managerEmail
-          ? fetch(`${API_BASE_URL}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`)
-          : Promise.resolve(null);
-
-        const [assignedResponse, pendingResponse] = await Promise.all([
-          assignedResponsePromise,
-          pendingResponsePromise,
-        ]);
-
-        if ((assignedResponse === null || assignedResponse.ok) && pendingResponse.ok) {
-          const [assignedData, pendingData] = await Promise.all([
-            assignedResponse ? assignedResponse.json() : Promise.resolve({ applications: [] }),
-            pendingResponse.json(),
-          ]);
-          const serverAssigned = mapScopedApplications((assignedData?.applications || []) as StoredAssignedApplication[]);
-          const serverPending = mapScopedApplications((pendingData?.applications || []) as StoredAssignedApplication[]);
-
-          setAssignedApplications(serverAssigned);
-          setPendingApplications(serverPending);
-
-          if (serverAssigned.length && !serverAssigned.find((app) => app.id === selectedAppId)) {
-            setSelectedAppId(serverAssigned[0].id);
-          }
-          return;
+      const getCandidateScore = (records: ManagerApplicationCard[]) => {
+        if (!records.length) {
+          return 0;
         }
-      } catch {
-        // Fallback to local assignment records for offline/demo scenarios.
+
+        const scoredCount = records.filter((app) => {
+          const summary = app.scoringSummary;
+          const backend = app.backendScoring as Record<string, unknown> | undefined;
+          return Boolean(
+            summary?.risk_category ||
+            summary?.risk_band ||
+            summary?.final_score !== undefined ||
+            (backend && (backend.gstinResult || backend.scoreResult))
+          );
+        }).length;
+
+        // Prefer sources that contain more assigned applications with scoring data.
+        return records.length * 100 + scoredCount;
+      };
+
+      for (const base of API_BASE_CANDIDATES) {
+        try {
+          const pendingResponsePromise = fetch(`${base}/applications/pending`);
+          const assignedResponsePromise = managerEmail
+            ? fetch(`${base}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`)
+            : Promise.resolve(null);
+
+          const [assignedResponse, pendingResponse] = await Promise.all([
+            assignedResponsePromise,
+            pendingResponsePromise,
+          ]);
+
+          if ((assignedResponse === null || assignedResponse.ok) && pendingResponse.ok) {
+            const [assignedData, pendingData] = await Promise.all([
+              assignedResponse ? assignedResponse.json() : Promise.resolve({ applications: [] }),
+              pendingResponse.json(),
+            ]);
+            const serverAssigned = mapScopedApplications((assignedData?.applications || []) as StoredAssignedApplication[]);
+            const serverPending = mapScopedApplications((pendingData?.applications || []) as StoredAssignedApplication[]);
+
+            const candidateScore = getCandidateScore(serverAssigned);
+            if (candidateScore > bestScore) {
+              bestScore = candidateScore;
+              bestAssigned = serverAssigned;
+              bestPending = serverPending;
+            }
+
+            // Keep scanning all candidates and pick the most complete dataset.
+          }
+        } catch {
+          // Try next backend candidate.
+        }
+      }
+
+      if (bestScore >= 0) {
+        setAssignedApplications(bestAssigned);
+        setPendingApplications(bestPending);
+
+        if (bestAssigned.length && !bestAssigned.find((app) => app.id === selectedAppId)) {
+          setSelectedAppId(bestAssigned[0].id);
+        }
+        return;
       }
 
       try {
@@ -775,57 +860,73 @@ export default function ManagerPage() {
     setAcceptingId(applicationId);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/applications/accept/${encodeURIComponent(applicationId)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          manager_email: managerEmail,
-          manager_name: state.currentUser.name || 'Credit Manager',
-        }),
-      });
+      let accepted = false;
 
-      if (!response.ok) {
-        throw new Error('accept_failed');
+      for (const base of API_BASE_CANDIDATES) {
+        try {
+          const response = await fetch(`${base}/applications/accept/${encodeURIComponent(applicationId)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              manager_email: managerEmail,
+              manager_name: state.currentUser.name || 'Credit Manager',
+            }),
+          });
+
+          if (!response.ok) {
+            continue;
+          }
+
+          accepted = true;
+
+          const assignedResponse = await fetch(`${base}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`);
+          const pendingResponse = await fetch(`${base}/applications/pending`);
+
+          if (assignedResponse.ok && pendingResponse.ok) {
+            const [assignedData, pendingData] = await Promise.all([
+              assignedResponse.json(),
+              pendingResponse.json(),
+            ]);
+
+            const mapScopedApplications = (records: StoredAssignedApplication[]): ManagerApplicationCard[] =>
+              records.map((app) => ({
+                id: app.id,
+                borrowerEmail: app.borrowerEmail,
+                borrowerName: app.borrowerName,
+                managerEmail: app.managerEmail,
+                managerName: app.managerName,
+                assignmentStatus: app.assignmentStatus,
+                acceptedAt: app.acceptedAt,
+                createdAt: app.createdAt,
+                companyName: app.companyName,
+                loanAmount: Number(app.loanAmount || 0),
+                riskLevel: app.riskLevel || 'medium',
+                currentStage: app.currentStage || 'submitted',
+                credibilityScore: Number(app.credibilityScore || 0),
+                updatedAt: app.updatedAt,
+                scoringSummary: (app as any).scoringSummary,
+                tabAnalysis: (app as any).tabAnalysis,
+                backendScoring: app.backendScoring,
+                documents: app.documents,
+              }));
+
+            const serverAssigned = mapScopedApplications((assignedData?.applications || []) as StoredAssignedApplication[]);
+            const serverPending = mapScopedApplications((pendingData?.applications || []) as StoredAssignedApplication[]);
+
+            setAssignedApplications(serverAssigned);
+            setPendingApplications(serverPending);
+          }
+
+          break;
+        } catch {
+          // Try next backend candidate.
+        }
       }
 
-      const assignedResponse = await fetch(`${API_BASE_URL}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`);
-      const pendingResponse = await fetch(`${API_BASE_URL}/applications/pending`);
-
-      if (assignedResponse.ok && pendingResponse.ok) {
-        const [assignedData, pendingData] = await Promise.all([
-          assignedResponse.json(),
-          pendingResponse.json(),
-        ]);
-
-        const mapScopedApplications = (records: StoredAssignedApplication[]): ManagerApplicationCard[] =>
-          records.map((app) => ({
-            id: app.id,
-            borrowerEmail: app.borrowerEmail,
-            borrowerName: app.borrowerName,
-            managerEmail: app.managerEmail,
-            managerName: app.managerName,
-            assignmentStatus: app.assignmentStatus,
-            acceptedAt: app.acceptedAt,
-            createdAt: app.createdAt,
-            companyName: app.companyName,
-            loanAmount: Number(app.loanAmount || 0),
-            riskLevel: app.riskLevel || 'medium',
-            currentStage: app.currentStage || 'submitted',
-            credibilityScore: Number(app.credibilityScore || 0),
-            updatedAt: app.updatedAt,
-            scoringSummary: (app as any).scoringSummary,
-            tabAnalysis: (app as any).tabAnalysis,
-            backendScoring: app.backendScoring,
-            documents: app.documents,
-          }));
-
-        const serverAssigned = mapScopedApplications((assignedData?.applications || []) as StoredAssignedApplication[]);
-        const serverPending = mapScopedApplications((pendingData?.applications || []) as StoredAssignedApplication[]);
-
-        setAssignedApplications(serverAssigned);
-        setPendingApplications(serverPending);
+      if (!accepted) {
+        throw new Error('accept_failed');
       }
 
       setSelectedAppId(applicationId);
@@ -836,10 +937,27 @@ export default function ManagerPage() {
     }
   };
 
-  const loadChatMessages = (applicationId: string) => {
+  const loadChatMessages = async (applicationId: string, borrowerEmail?: string, companyName?: string) => {
     if (!applicationId || typeof window === 'undefined') {
       setChatMessages([]);
       return;
+    }
+
+    for (const base of CHAT_API_BASES) {
+      try {
+        const response = await fetch(`${base}/applications/${encodeURIComponent(applicationId)}/messages`);
+        if (!response.ok) {
+          continue;
+        }
+        const data = await response.json();
+        const messages = Array.isArray(data?.messages) ? data.messages : [];
+        const sorted = messages
+          .sort((a: StoredChatMessage, b: StoredChatMessage) => String(b.timestamp).localeCompare(String(a.timestamp)));
+        setChatMessages(sorted);
+        return;
+      } catch {
+        // Try next backend candidate.
+      }
     }
 
     try {
@@ -847,7 +965,16 @@ export default function ManagerPage() {
       const parsed = raw ? JSON.parse(raw) : [];
       const list = Array.isArray(parsed) ? parsed : [];
       const scoped = list
-        .filter((item: StoredChatMessage) => item.applicationId === applicationId)
+        .filter((item: StoredChatMessage) => {
+          const idMatch = item.applicationId === applicationId;
+          const emailMatch = borrowerEmail && item.borrowerEmail
+            ? String(item.borrowerEmail).toLowerCase() === String(borrowerEmail).toLowerCase()
+            : false;
+          const companyMatch = companyName && item.companyName
+            ? String(item.companyName).toLowerCase() === String(companyName).toLowerCase()
+            : false;
+          return Boolean(idMatch || emailMatch || companyMatch);
+        })
         .sort((a: StoredChatMessage, b: StoredChatMessage) => String(b.timestamp).localeCompare(String(a.timestamp)));
       setChatMessages(scoped);
     } catch {
@@ -855,20 +982,52 @@ export default function ManagerPage() {
     }
   };
 
-  const handleSendManagerReply = () => {
+  const handleSendManagerReply = async () => {
     const content = managerReply.trim();
     if (!content || !selectedAppId || typeof window === 'undefined') {
       return;
     }
+
+    const selectedForReply = assignedApplications.find((app) => app.id === selectedAppId);
 
     const newItem: StoredChatMessage = {
       id: Date.now(),
       applicationId: selectedAppId,
       senderRole: 'manager',
       senderName: state.currentUser.name || 'Manager',
+      borrowerEmail: selectedForReply?.borrowerEmail,
+      companyName: selectedForReply?.companyName,
       message: content,
       timestamp: new Date().toLocaleString(),
     };
+
+    let apiSaved = false;
+    for (const base of CHAT_API_BASES) {
+      try {
+        const response = await fetch(`${base}/applications/${encodeURIComponent(selectedAppId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender_role: 'manager',
+            sender_name: state.currentUser.name || 'Manager',
+            message: content,
+            borrower_email: selectedForReply?.borrowerEmail || null,
+            company_name: selectedForReply?.companyName || null,
+          }),
+        });
+
+        if (response.ok) {
+          apiSaved = true;
+          break;
+        }
+      } catch {
+        // Try next backend candidate.
+      }
+    }
+
+    if (!apiSaved) {
+      // Keep local fallback for resilience.
+    }
 
     try {
       const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
@@ -880,7 +1039,7 @@ export default function ManagerPage() {
     }
 
     setManagerReply('');
-    loadChatMessages(selectedAppId);
+    void loadChatMessages(selectedAppId, selectedForReply?.borrowerEmail, selectedForReply?.companyName);
   };
 
   const selectedAssignedApplication = assignedApplications.find((app) => app.id === selectedAppId);
@@ -942,8 +1101,9 @@ export default function ManagerPage() {
       return;
     }
 
-    loadChatMessages(selectedAppId);
-  }, [isClient, selectedAppId, refreshTick]);
+    const selectedForChat = assignedApplications.find((app) => app.id === selectedAppId);
+    void loadChatMessages(selectedAppId, selectedForChat?.borrowerEmail, selectedForChat?.companyName);
+  }, [isClient, selectedAppId, refreshTick, assignedApplications]);
 
   const hasLiveApplication = Boolean(
     state.applicationState.applicationId ||
@@ -1151,6 +1311,8 @@ export default function ManagerPage() {
       }))
     : [];
 
+  const getPreviewUrl = (name: string) => `/mock_pdfs/${encodeURIComponent(name)}`;
+
   const processedDocumentPreview = gstinResult
     ? {
         gstin: gstinResult.gstin,
@@ -1207,6 +1369,19 @@ export default function ManagerPage() {
     }
 
     return parsed.toLocaleString();
+  };
+
+  const formatDateOnlyLabel = (value?: string | null) => {
+    if (!value) {
+      return 'N/A';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleDateString();
   };
 
   const getRiskColor = (level) => {
@@ -1624,7 +1799,7 @@ export default function ManagerPage() {
                   Visit Date
                 </p>
                 <p style={{ color: '#F1F5F9' }} className="font-semibold">
-                  {isClient ? new Date(aiAnalysis.siteReview.visitDate).toLocaleDateString() : 'Loading...'}
+                  {isClient ? formatDateOnlyLabel(aiAnalysis.siteReview.visitDate) : 'Loading...'}
                 </p>
               </div>
 
@@ -1653,6 +1828,12 @@ export default function ManagerPage() {
 
           {activeTab === 'risk' && (
             <div className="space-y-6">
+              {(() => {
+                const collateralValue = Number(aiAnalysis.risk.collateralValue || 0);
+                const loanAmount = Number(aiAnalysis.risk.loanAmount || 0);
+                const ltvRatio = loanAmount > 0 ? collateralValue / loanAmount : null;
+
+                return (
               <div className="grid grid-cols-2 gap-6">
                 <RiskGauge probabilityOfDefault={aiAnalysis.risk.probabilityOfDefault} />
                 <div className="space-y-4">
@@ -1664,10 +1845,10 @@ export default function ManagerPage() {
                       Collateral
                     </p>
                     <p className="font-mono text-lg" style={{ color: '#D4A843' }}>
-                      ₹{(aiAnalysis.risk.collateralValue / 100000).toFixed(1)}L
+                      ₹{(collateralValue / 100000).toFixed(1)}L
                     </p>
                     <p style={{ color: '#64748B' }} className="text-xs mt-1">
-                      {(aiAnalysis.risk.collateralValue / aiAnalysis.risk.loanAmount).toFixed(1)}x LTV
+                      {ltvRatio !== null ? `${ltvRatio.toFixed(1)}x LTV` : '--'}
                     </p>
                   </div>
 
@@ -1688,6 +1869,8 @@ export default function ManagerPage() {
                   </div>
                 </div>
               </div>
+                );
+              })()}
 
               <FraudNetworkGraph network={resolvedFraudNetwork} fraudSummary={gstinOutput?.fraud_summary} />
             </div>
@@ -1850,6 +2033,7 @@ export default function ManagerPage() {
                     </div>
                   </div>
                   <button className="w-full py-1.5 text-xs rounded flex items-center justify-center gap-1 transition-all hover:opacity-80"
+                    onClick={() => setPreviewDoc({ name: doc.name, pages: doc.pages, url: getPreviewUrl(doc.name) })}
                     style={{
                       backgroundColor: '#1E2A3A',
                       color: '#D4A843',
@@ -1917,6 +2101,53 @@ export default function ManagerPage() {
         fraudNetwork={resolvedFraudNetwork}
         fraudSummary={gstinOutput?.fraud_summary}
       />
+
+      {previewDoc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+          onClick={() => setPreviewDoc(null)}
+        >
+          <div
+            className="w-full max-w-xl rounded-lg p-5"
+            style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <p style={{ color: '#F1F5F9' }} className="font-semibold">Document Preview</p>
+              <button
+                onClick={() => setPreviewDoc(null)}
+                className="text-sm px-3 py-1 rounded"
+                style={{ backgroundColor: '#1E2A3A', color: '#D4A843' }}
+              >
+                Close
+              </button>
+            </div>
+            <div className="rounded-lg p-4" style={{ backgroundColor: '#0B0F1A', border: '1px solid #1E2A3A' }}>
+              <p style={{ color: '#F1F5F9' }} className="text-sm font-mono">{previewDoc.name}</p>
+              <p style={{ color: '#94A3B8' }} className="text-xs mt-1">{previewDoc.pages} page{previewDoc.pages > 1 ? 's' : ''}</p>
+              <div className="mt-4 h-[420px] rounded overflow-hidden" style={{ border: '1px solid #1E2A3A' }}>
+                <object data={previewDoc.url} type="application/pdf" width="100%" height="100%">
+                  <div className="p-4">
+                    <p style={{ color: '#64748B' }} className="text-xs">
+                      PDF preview is unavailable in this browser context.
+                    </p>
+                    <a
+                      href={previewDoc.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block mt-2 text-xs"
+                      style={{ color: '#D4A843' }}
+                    >
+                      Open document in new tab
+                    </a>
+                  </div>
+                </object>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

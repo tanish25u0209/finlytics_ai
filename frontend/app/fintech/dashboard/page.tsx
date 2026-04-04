@@ -8,6 +8,7 @@ import {
 import { useState, useEffect, useRef } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const CHAT_API_BASES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
 const CHAT_STORAGE_KEY = 'finserv-aim-chat-messages';
 
 type StoredChatMessage = {
@@ -15,6 +16,8 @@ type StoredChatMessage = {
   applicationId: string;
   senderRole: 'borrower' | 'manager';
   senderName: string;
+  borrowerEmail?: string;
+  companyName?: string;
   subject?: string;
   message: string;
   attachmentName?: string;
@@ -129,10 +132,34 @@ export default function DashboardPage() {
     lastUpdated: applicationState.lastUpdated || selectedBorrowerApplication?.updatedAt,
   };
 
-  const loadStoredNegotiations = (applicationId: string) => {
+  const loadStoredNegotiations = async (applicationId: string, borrowerEmail?: string, companyName?: string) => {
     if (!applicationId || typeof window === 'undefined') {
       setNegotiationEntries([]);
       return;
+    }
+
+    for (const base of CHAT_API_BASES) {
+      try {
+        const response = await fetch(`${base}/applications/${encodeURIComponent(applicationId)}/messages`);
+        if (!response.ok) {
+          continue;
+        }
+        const data = await response.json();
+        const messages = Array.isArray(data?.messages) ? data.messages : [];
+        const mapped = messages
+          .sort((a: StoredChatMessage, b: StoredChatMessage) => String(b.timestamp).localeCompare(String(a.timestamp)))
+          .map((item: StoredChatMessage) => ({
+            id: item.id,
+            sender: item.senderRole === 'manager' ? item.senderName || 'Manager' : 'You',
+            message: `${item.subject ? `${item.subject}: ` : ''}${item.message}${item.attachmentName ? ` [Attachment: ${item.attachmentName}]` : ''}`,
+            timestamp: item.timestamp,
+            type: (item.senderRole === 'manager' ? 'response' : 'query') as 'query' | 'response',
+          }));
+        setNegotiationEntries(mapped);
+        return;
+      } catch {
+        // Try next backend candidate.
+      }
     }
 
     try {
@@ -141,7 +168,16 @@ export default function DashboardPage() {
       const list = Array.isArray(parsed) ? parsed : [];
 
       const mapped = list
-        .filter((item: StoredChatMessage) => item.applicationId === applicationId)
+        .filter((item: StoredChatMessage) => {
+          const idMatch = item.applicationId === applicationId;
+          const emailMatch = borrowerEmail && item.borrowerEmail
+            ? String(item.borrowerEmail).toLowerCase() === String(borrowerEmail).toLowerCase()
+            : false;
+          const companyMatch = companyName && item.companyName
+            ? String(item.companyName).toLowerCase() === String(companyName).toLowerCase()
+            : false;
+          return Boolean(idMatch || emailMatch || companyMatch);
+        })
         .sort((a: StoredChatMessage, b: StoredChatMessage) => String(b.timestamp).localeCompare(String(a.timestamp)))
         .map((item: StoredChatMessage) => ({
           id: item.id,
@@ -162,16 +198,26 @@ export default function DashboardPage() {
       return;
     }
 
-    loadStoredNegotiations(String(syncedApplicationState.applicationId));
+    const selectedForChat = selectedBorrowerApplication;
+
+    void loadStoredNegotiations(
+      String(syncedApplicationState.applicationId),
+      state.currentUser.email || selectedForChat?.borrowerEmail,
+      selectedForChat?.companyName,
+    );
 
     const intervalId = window.setInterval(() => {
-      loadStoredNegotiations(String(syncedApplicationState.applicationId));
+      void loadStoredNegotiations(
+        String(syncedApplicationState.applicationId),
+        state.currentUser.email || selectedForChat?.borrowerEmail,
+        selectedForChat?.companyName,
+      );
     }, 3000);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [mounted, syncedApplicationState.applicationId]);
+  }, [mounted, syncedApplicationState.applicationId, state.currentUser.email, selectedBorrowerApplication]);
 
   const backendScoring = selectedBorrowerApplication?.backendScoring || formData.backendScoring || {};
   const gstinResult = gstinPreview || backendScoring.gstinResult;
@@ -305,7 +351,7 @@ export default function DashboardPage() {
     setActionMessage(`Attached document: ${file.name}`);
   };
 
-  const handleSendQuery = () => {
+  const handleSendQuery = async () => {
     const subject = querySubject.trim();
     const message = queryMessage.trim();
 
@@ -321,11 +367,43 @@ export default function DashboardPage() {
       applicationId,
       senderRole: 'borrower',
       senderName: state.currentUser.name || 'Borrower',
+      borrowerEmail: state.currentUser.email || undefined,
+      companyName: selectedBorrowerApplication?.companyName || undefined,
       subject,
       message,
       attachmentName: attachedDocumentName || undefined,
       timestamp,
     };
+
+    let apiSaved = false;
+    for (const base of CHAT_API_BASES) {
+      try {
+        const response = await fetch(`${base}/applications/${encodeURIComponent(applicationId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender_role: 'borrower',
+            sender_name: state.currentUser.name || 'Borrower',
+            message,
+            subject,
+            attachment_name: attachedDocumentName || null,
+            borrower_email: state.currentUser.email || null,
+            company_name: selectedBorrowerApplication?.companyName || null,
+          }),
+        });
+
+        if (response.ok) {
+          apiSaved = true;
+          break;
+        }
+      } catch {
+        // Try next backend candidate.
+      }
+    }
+
+    if (!apiSaved) {
+      // Keep local fallback when backend persistence is unavailable.
+    }
 
     try {
       if (typeof window !== 'undefined') {
@@ -338,7 +416,7 @@ export default function DashboardPage() {
       // Keep UI responsive even if persistence fails.
     }
 
-    loadStoredNegotiations(applicationId);
+    void loadStoredNegotiations(applicationId, state.currentUser.email, selectedBorrowerApplication?.companyName);
     setQuerySubject('');
     setQueryMessage('');
     setAttachedDocumentName('');

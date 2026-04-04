@@ -189,6 +189,39 @@ class ApplicationAcceptResponse(BaseModel):
     application: ApplicationRecord
 
 
+class ApplicationChatMessage(BaseModel):
+    """Chat message associated with a specific application."""
+
+    id: int
+    applicationId: str
+    senderRole: str
+    senderName: str
+    subject: Optional[str] = None
+    message: str
+    attachmentName: Optional[str] = None
+    borrowerEmail: Optional[str] = None
+    companyName: Optional[str] = None
+    timestamp: str
+
+
+class ApplicationChatMessageCreateRequest(BaseModel):
+    """Request schema for creating a chat message."""
+
+    sender_role: str = Field(..., min_length=3)
+    sender_name: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+    subject: Optional[str] = None
+    attachment_name: Optional[str] = None
+    borrower_email: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+class ApplicationChatMessagesResponse(BaseModel):
+    """List chat messages for an application."""
+
+    messages: List[ApplicationChatMessage]
+
+
 class ManagerScoringSummary(BaseModel):
     """Normalized underwriting summary for manager dashboard cards/panels."""
 

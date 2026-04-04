@@ -8,6 +8,7 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
 const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
+const API_BASE_CANDIDATES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
 
 // Mock agent statuses
 const mockAgentStatuses = {
@@ -335,19 +336,21 @@ export default function AgentsPage() {
         return;
       }
 
-      try {
-        const response = await fetch(`${API_BASE_URL}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`);
-        if (response.ok) {
-          const data = await response.json();
-          const apps = Array.isArray(data?.applications) ? data.applications : [];
-          if (apps.length) {
-            const latest = [...apps].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
-            setDerivedAgentStatuses(buildDerivedStatuses(latest));
-            return;
+      for (const base of API_BASE_CANDIDATES) {
+        try {
+          const response = await fetch(`${base}/applications/manager/${encodeURIComponent(managerEmail)}/dashboard`);
+          if (response.ok) {
+            const data = await response.json();
+            const apps = Array.isArray(data?.applications) ? data.applications : [];
+            if (apps.length) {
+              const latest = [...apps].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
+              setDerivedAgentStatuses(buildDerivedStatuses(latest));
+              return;
+            }
           }
+        } catch {
+          // Try next backend candidate.
         }
-      } catch {
-        // Use local fallback below.
       }
 
       if (typeof window !== 'undefined') {
@@ -384,22 +387,25 @@ export default function AgentsPage() {
     }
 
     const loadSystemMetrics = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/applications/system-metrics`);
-        if (!response.ok) {
-          return;
+      for (const base of API_BASE_CANDIDATES) {
+        try {
+          const response = await fetch(`${base}/applications/system-metrics`);
+          if (!response.ok) {
+            continue;
+          }
+          const payload = await response.json();
+          const load = Number(payload?.system_load_percent);
+          const label = String(payload?.health_label || 'Healthy');
+          if (!Number.isNaN(load)) {
+            setSystemMetrics({
+              system_load_percent: Math.max(0, Math.min(100, load)),
+              health_label: label,
+            });
+            return;
+          }
+        } catch {
+          // Try next backend candidate.
         }
-        const payload = await response.json();
-        const load = Number(payload?.system_load_percent);
-        const label = String(payload?.health_label || 'Healthy');
-        if (!Number.isNaN(load)) {
-          setSystemMetrics({
-            system_load_percent: Math.max(0, Math.min(100, load)),
-            health_label: label,
-          });
-        }
-      } catch {
-        // Keep previous or fallback value on transient API errors.
       }
     };
 

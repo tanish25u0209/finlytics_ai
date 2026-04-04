@@ -1,5 +1,424 @@
 [
   {
+    "id": "FAIM-2024-98245",
+    "borrowerEmail": "modgekartanish@gmail.com",
+    "borrowerName": "Tanish",
+    "managerEmail": "tanishmodgekar@gmail.com",
+    "managerName": "tanish",
+    "companyName": "Tanish",
+    "loanAmount": 500000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 0,
+    "createdAt": "2026-04-04T01:42:37.665Z",
+    "updatedAt": "2026-04-04T02:31:58.506251+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T01:43:00.235197+00:00",
+    "backendScoring": {
+      "extractedPayload": {
+        "monthly_revenue": 90000,
+        "total_debt": 1600000,
+        "emi": 60000,
+        "business_age_months": 8,
+        "gst_compliant": false,
+        "has_disputes": true
+      },
+      "processedDocuments": [
+        {
+          "document_type": "loan_history",
+          "source_document": "loan_history_disputes_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": null,
+          "gst_compliant": null,
+          "has_disputes": true
+        },
+        {
+          "document_type": "incorporation_certificate",
+          "source_document": "incorporation_certificate_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": 8,
+          "gst_compliant": null,
+          "has_disputes": null
+        },
+        {
+          "document_type": "gst_filing",
+          "source_document": "gst_filing_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": null,
+          "gst_compliant": false,
+          "has_disputes": null
+        },
+        {
+          "document_type": "bank_statement",
+          "source_document": "bank_statement_sample.pdf",
+          "monthly_revenue": 90000,
+          "total_debt": 1600000,
+          "emi": 60000,
+          "business_age_months": null,
+          "gst_compliant": null,
+          "has_disputes": null
+        }
+      ],
+      "scoreResult": {
+        "rule_score": 0,
+        "pd": 0.6,
+        "final_score": 24,
+        "risk_category": "High Risk",
+        "decision": "Reject",
+        "key_factors": {
+          "positive": [],
+          "negative": [
+            "Debt ratio 1.48 indicates high leverage risk"
+          ]
+        }
+      },
+      "gstinInput": "29ABCDE1000Z0",
+      "gstinResult": {
+        "gstin": "29ABCDE1000Z0",
+        "credit_score": 411,
+        "risk_band": "High Risk",
+        "risk_score": 21.03,
+        "probability_of_default": 0.7897,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "Inflow-to-outflow ratio is weak, suggesting tighter repayment capacity.",
+          "Net cash retained after outflows is weak, limiting internal repayment cushion.",
+          "Cash-flow health is weak after accounting for volatility.",
+          "GST filings are frequently delayed, increasing repayment risk."
+        ],
+        "recommended_loan_amount": 50000,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.825,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1001Z1, 29ABCDE1004Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1001Z1",
+          "29ABCDE1004Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1000Z0",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1001Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1004Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1000Z0",
+              "to_gstin": "29ABCDE1001Z1",
+              "monthly_flow_inr": 185000,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1001Z1",
+              "to_gstin": "29ABCDE1004Z4",
+              "monthly_flow_inr": 91000,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1004Z4",
+              "to_gstin": "29ABCDE1000Z0",
+              "monthly_flow_inr": 43000,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 3
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0
+        },
+        "score_freshness_timestamp": "2026-04-04T01:41:52.360312+00:00"
+      }
+    },
+    "documents": [
+      {
+        "id": "doc-incorporation_certificate_sample.pdf",
+        "name": "incorporation_certificate_sample.pdf",
+        "type": "incorporation_certificate",
+        "uploadedAt": "2026-04-04T01:04:11.184Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-gst_filing_sample.pdf",
+        "name": "gst_filing_sample.pdf",
+        "type": "gst_filing",
+        "uploadedAt": "2026-04-04T01:04:18.452Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-bank_statement_sample.pdf",
+        "name": "bank_statement_sample.pdf",
+        "type": "bank_statement",
+        "uploadedAt": "2026-04-04T01:04:29.008Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-loan_history_disputes_sample.pdf",
+        "name": "loan_history_disputes_sample.pdf",
+        "type": "loan_history",
+        "uploadedAt": "2026-04-04T01:04:42.076Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-incorporation_certificate_sample.pdf",
+        "name": "incorporation_certificate_sample.pdf",
+        "type": "incorporation_certificate",
+        "uploadedAt": "2026-04-04T01:40:58.303Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-gst_filing_sample.pdf",
+        "name": "gst_filing_sample.pdf",
+        "type": "gst_filing",
+        "uploadedAt": "2026-04-04T01:41:22.979Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-bank_statement_sample.pdf",
+        "name": "bank_statement_sample.pdf",
+        "type": "bank_statement",
+        "uploadedAt": "2026-04-04T01:41:48.452Z",
+        "status": "approved"
+      }
+    ],
+    "chatMessages": [
+      {
+        "id": 1775269918506,
+        "applicationId": "FAIM-2024-98245",
+        "senderRole": "borrower",
+        "senderName": "Tanish",
+        "subject": "kj",
+        "message": "hu",
+        "attachmentName": null,
+        "borrowerEmail": "modgekartanish@gmail.com",
+        "companyName": "Tanish",
+        "timestamp": "2026-04-04T02:31:58.506232+00:00"
+      },
+      {
+        "id": 1775269896224,
+        "applicationId": "FAIM-2024-98245",
+        "senderRole": "borrower",
+        "senderName": "Tanish",
+        "subject": "dfs",
+        "message": "dgdff",
+        "attachmentName": null,
+        "borrowerEmail": "modgekartanish@gmail.com",
+        "companyName": "Tanish",
+        "timestamp": "2026-04-04T02:31:36.224708+00:00"
+      },
+      {
+        "id": 1775267058752,
+        "applicationId": "FAIM-2024-98245",
+        "senderRole": "manager",
+        "senderName": "tanish",
+        "subject": null,
+        "message": "sorry we cant",
+        "attachmentName": null,
+        "borrowerEmail": "modgekartanish@gmail.com",
+        "companyName": "Tanish",
+        "timestamp": "2026-04-04T01:44:18.753425+00:00"
+      }
+    ]
+  },
+  {
+    "id": "FAIM-2024-19833",
+    "borrowerEmail": "modgekartanish@gmail.com",
+    "borrowerName": "Tanish",
+    "managerEmail": "tanishmodgekar@gmail.com",
+    "managerName": "tanish",
+    "companyName": "Tanish",
+    "loanAmount": 500000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 0,
+    "createdAt": "2026-04-04T01:07:44.631Z",
+    "updatedAt": "2026-04-04T01:07:51.161595+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T01:07:51.161595+00:00",
+    "backendScoring": {
+      "extractedPayload": {
+        "monthly_revenue": 90000,
+        "total_debt": 1600000,
+        "emi": 60000,
+        "business_age_months": 8,
+        "gst_compliant": false,
+        "has_disputes": true
+      },
+      "processedDocuments": [
+        {
+          "document_type": "incorporation_certificate",
+          "source_document": "incorporation_certificate_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": 8,
+          "gst_compliant": null,
+          "has_disputes": null
+        },
+        {
+          "document_type": "gst_filing",
+          "source_document": "gst_filing_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": null,
+          "gst_compliant": false,
+          "has_disputes": null
+        },
+        {
+          "document_type": "bank_statement",
+          "source_document": "bank_statement_sample.pdf",
+          "monthly_revenue": 90000,
+          "total_debt": 1600000,
+          "emi": 60000,
+          "business_age_months": null,
+          "gst_compliant": null,
+          "has_disputes": null
+        },
+        {
+          "document_type": "loan_history",
+          "source_document": "loan_history_disputes_sample.pdf",
+          "monthly_revenue": null,
+          "total_debt": null,
+          "emi": null,
+          "business_age_months": null,
+          "gst_compliant": null,
+          "has_disputes": true
+        }
+      ],
+      "scoreResult": {
+        "rule_score": 0,
+        "pd": 0.6,
+        "final_score": 24,
+        "risk_category": "High Risk",
+        "decision": "Reject",
+        "key_factors": {
+          "positive": [],
+          "negative": [
+            "Debt ratio 1.48 indicates high leverage risk"
+          ]
+        }
+      },
+      "gstinInput": "29ABCDE1000Z0",
+      "gstinResult": {
+        "gstin": "29ABCDE1000Z0",
+        "credit_score": 411,
+        "risk_band": "High Risk",
+        "risk_score": 21.03,
+        "probability_of_default": 0.7897,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "Inflow-to-outflow ratio is weak, suggesting tighter repayment capacity.",
+          "Net cash retained after outflows is weak, limiting internal repayment cushion.",
+          "Cash-flow health is weak after accounting for volatility.",
+          "GST filings are frequently delayed, increasing repayment risk."
+        ],
+        "recommended_loan_amount": 50000,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.825,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1001Z1, 29ABCDE1004Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1001Z1",
+          "29ABCDE1004Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1000Z0",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1001Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1004Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1000Z0",
+              "to_gstin": "29ABCDE1001Z1",
+              "monthly_flow_inr": 185000,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1001Z1",
+              "to_gstin": "29ABCDE1004Z4",
+              "monthly_flow_inr": 91000,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1004Z4",
+              "to_gstin": "29ABCDE1000Z0",
+              "monthly_flow_inr": 43000,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 3
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0
+        },
+        "score_freshness_timestamp": "2026-04-04T01:07:16.360917+00:00"
+      }
+    },
+    "documents": [
+      {
+        "id": "doc-incorporation_certificate_sample.pdf",
+        "name": "incorporation_certificate_sample.pdf",
+        "type": "incorporation_certificate",
+        "uploadedAt": "2026-04-04T01:04:11.184Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-gst_filing_sample.pdf",
+        "name": "gst_filing_sample.pdf",
+        "type": "gst_filing",
+        "uploadedAt": "2026-04-04T01:04:18.452Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-bank_statement_sample.pdf",
+        "name": "bank_statement_sample.pdf",
+        "type": "bank_statement",
+        "uploadedAt": "2026-04-04T01:04:29.008Z",
+        "status": "approved"
+      },
+      {
+        "id": "doc-loan_history_disputes_sample.pdf",
+        "name": "loan_history_disputes_sample.pdf",
+        "type": "loan_history",
+        "uploadedAt": "2026-04-04T01:04:42.076Z",
+        "status": "approved"
+      }
+    ]
+  },
+  {
     "id": "APP-PKG-1775262507-05",
     "borrowerEmail": "pkg5.1775262507@example.com",
     "borrowerName": "Borrower package_05_mixed_edge",
@@ -944,7 +1363,7 @@
     "currentStage": "submitted",
     "credibilityScore": 0,
     "createdAt": "2026-04-03T22:08:10.201Z",
-    "updatedAt": "2026-04-03T22:08:18.962896+00:00",
+    "updatedAt": "2026-04-04T00:59:48.615551+00:00",
     "assignmentStatus": "accepted",
     "acceptedAt": "2026-04-03T22:08:18.962896+00:00",
     "backendScoring": {
@@ -1027,6 +1446,32 @@
         "type": "loan_history",
         "uploadedAt": "2026-04-03T22:08:07.395Z",
         "status": "approved"
+      }
+    ],
+    "chatMessages": [
+      {
+        "id": 1775264388615,
+        "applicationId": "FAIM-2024-03361",
+        "senderRole": "borrower",
+        "senderName": "Test Borrower",
+        "subject": "SmokeTest",
+        "message": "chat smoke test",
+        "attachmentName": null,
+        "borrowerEmail": "modgekartanish@gmail.com",
+        "companyName": "Tanish",
+        "timestamp": "2026-04-04T00:59:48.615544+00:00"
+      },
+      {
+        "id": 1775264286319,
+        "applicationId": "FAIM-2024-03361",
+        "senderRole": "borrower",
+        "senderName": "Test Borrower",
+        "subject": "API Test",
+        "message": "Hello manager from API test",
+        "attachmentName": null,
+        "borrowerEmail": "modgekartanish@gmail.com",
+        "companyName": "Tanish",
+        "timestamp": "2026-04-04T00:58:06.319538+00:00"
       }
     ]
   }

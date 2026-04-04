@@ -182,6 +182,7 @@ class ApplicationAssignmentService:
             "acceptedAt": payload.get("updated_at") if manager["email"] else None,
             "backendScoring": payload.get("backend_scoring") or {},
             "documents": payload.get("documents") or [],
+            "chatMessages": payload.get("chat_messages") or [],
         }
 
         records = self._read_all()
@@ -402,3 +403,48 @@ class ApplicationAssignmentService:
         records[idx] = record
         self._write_all(records)
         return record
+
+    def get_application_messages(self, application_id: str) -> List[Dict[str, Any]]:
+        for record in self._read_all():
+            if str(record.get("id", "")) == str(application_id):
+                messages = record.get("chatMessages") or []
+                if isinstance(messages, list):
+                    return messages
+                return []
+        raise ValueError("Application not found")
+
+    def add_application_message(self, application_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        records = self._read_all()
+        idx = -1
+        for i, record in enumerate(records):
+            if str(record.get("id", "")) == str(application_id):
+                idx = i
+                break
+
+        if idx < 0:
+            raise ValueError("Application not found")
+
+        record = records[idx]
+        messages = record.get("chatMessages") or []
+        if not isinstance(messages, list):
+            messages = []
+
+        message = {
+            "id": int(datetime.now(timezone.utc).timestamp() * 1000),
+            "applicationId": str(application_id),
+            "senderRole": str(payload.get("sender_role") or "borrower"),
+            "senderName": str(payload.get("sender_name") or "User"),
+            "subject": payload.get("subject"),
+            "message": str(payload.get("message") or ""),
+            "attachmentName": payload.get("attachment_name"),
+            "borrowerEmail": payload.get("borrower_email"),
+            "companyName": payload.get("company_name"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        messages.insert(0, message)
+        record["chatMessages"] = messages
+        record["updatedAt"] = datetime.now(timezone.utc).isoformat()
+        records[idx] = record
+        self._write_all(records)
+        return message

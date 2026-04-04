@@ -16,6 +16,8 @@ try:
         ApplicationAcceptRequest,
         ApplicationAcceptResponse,
         ManagerDashboardResponse,
+        ApplicationChatMessageCreateRequest,
+        ApplicationChatMessagesResponse,
     )
     from ..services.scoring_engine import ScoringEngine
     from ..services.document_extractor import MockDocumentExtractor
@@ -35,6 +37,8 @@ except ImportError:  # pragma: no cover - fallback for direct execution
         ApplicationAcceptRequest,
         ApplicationAcceptResponse,
         ManagerDashboardResponse,
+        ApplicationChatMessageCreateRequest,
+        ApplicationChatMessagesResponse,
     )
     from services.scoring_engine import ScoringEngine
     from services.document_extractor import MockDocumentExtractor
@@ -209,3 +213,27 @@ def accept_application(application_id: str, request: ApplicationAcceptRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Application accept failed: {str(e)}")
+
+
+@router.get("/applications/{application_id}/messages", response_model=ApplicationChatMessagesResponse)
+def get_application_messages(application_id: str):
+    """Fetch chat messages for a given application."""
+    try:
+        messages = assignment_service.get_application_messages(application_id)
+        return {"messages": messages}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Application message fetch failed: {str(e)}")
+
+
+@router.post("/applications/{application_id}/messages")
+def post_application_message(application_id: str, request: ApplicationChatMessageCreateRequest):
+    """Create a chat message for the selected application."""
+    try:
+        message = assignment_service.add_application_message(application_id, request.dict())
+        return {"message": message}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Application message create failed: {str(e)}")
