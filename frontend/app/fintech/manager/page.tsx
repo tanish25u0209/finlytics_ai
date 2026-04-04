@@ -9,6 +9,36 @@ import {
 
 const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const CHAT_STORAGE_KEY = 'finserv-aim-chat-messages';
+
+type StoredChatMessage = {
+  id: number;
+  applicationId: string;
+  senderRole: 'borrower' | 'manager';
+  senderName: string;
+  subject?: string;
+  message: string;
+  attachmentName?: string;
+  timestamp: string;
+};
+
+type FraudNetworkNode = {
+  id: string;
+  is_suspicious?: boolean;
+};
+
+type FraudNetworkEdge = {
+  from: string;
+  to: string;
+  amount?: number;
+  is_cycle_edge?: boolean;
+};
+
+type FraudNetworkPayload = {
+  nodes?: FraudNetworkNode[];
+  edges?: FraudNetworkEdge[];
+  cycle_count?: number;
+};
 
 type StoredAssignedApplication = {
   id: string;
@@ -255,6 +285,119 @@ const RiskGauge = ({ probabilityOfDefault }) => {
   );
 };
 
+const FraudNetworkGraph = ({ network, fraudSummary }: { network?: FraudNetworkPayload; fraudSummary?: string }) => {
+  const nodes = network?.nodes || [];
+  const edges = network?.edges || [];
+  const cycleCount = Number(network?.cycle_count || 0);
+  const hasGraph = nodes.length > 0;
+  const size = 280;
+  const radius = 92;
+  const center = size / 2;
+
+  const nodePositions = nodes.reduce<Record<string, { x: number; y: number }>>((acc, node, index) => {
+    const angle = (2 * Math.PI * index) / Math.max(nodes.length, 1) - Math.PI / 2;
+    acc[node.id] = {
+      x: center + radius * Math.cos(angle),
+      y: center + radius * Math.sin(angle),
+    };
+    return acc;
+  }, {});
+
+  return (
+    <div
+      className="rounded-lg p-4 animate-in fade-in duration-300"
+      style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <p style={{ color: '#64748B' }} className="text-xs uppercase">
+            Fraud Topology (Twist 1)
+          </p>
+          <p style={{ color: '#F1F5F9' }} className="text-sm font-semibold mt-1">
+            Circular transaction ring detection graph
+          </p>
+        </div>
+        <span
+          className="text-xs px-2 py-1 rounded-full font-semibold"
+          style={{
+            backgroundColor: cycleCount > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(45, 212, 160, 0.15)',
+            color: cycleCount > 0 ? '#EF4444' : '#2DD4A0',
+          }}
+        >
+          Cycles: {cycleCount}
+        </span>
+      </div>
+
+      {!hasGraph && (
+        <p style={{ color: '#64748B' }} className="text-xs">
+          No suspicious loop detected in current GST transaction network.
+        </p>
+      )}
+
+      {hasGraph && (
+        <div className="overflow-x-auto">
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {edges.map((edge, idx) => {
+              const from = nodePositions[edge.from];
+              const to = nodePositions[edge.to];
+              if (!from || !to) {
+                return null;
+              }
+              return (
+                <line
+                  key={`${edge.from}-${edge.to}-${idx}`}
+                  x1={from.x}
+                  y1={from.y}
+                  x2={to.x}
+                  y2={to.y}
+                  stroke={edge.is_cycle_edge ? '#EF4444' : '#64748B'}
+                  strokeWidth={edge.is_cycle_edge ? 2.5 : 1.5}
+                  strokeOpacity={0.9}
+                />
+              );
+            })}
+
+            {nodes.map((node) => {
+              const point = nodePositions[node.id];
+              if (!point) {
+                return null;
+              }
+              return (
+                <g key={node.id}>
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={11}
+                    fill={node.is_suspicious ? '#EF4444' : '#2DD4A0'}
+                    stroke="#0B0F1A"
+                    strokeWidth={2}
+                  />
+                  <text
+                    x={point.x}
+                    y={point.y + 4}
+                    textAnchor="middle"
+                    fill="#0B0F1A"
+                    fontSize="8"
+                    fontWeight="700"
+                  >
+                    {node.id.slice(-2).toUpperCase()}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
+
+      {fraudSummary && (
+        <p style={{ color: '#F59E0B' }} className="text-xs mt-2">
+          {fraudSummary}
+        </p>
+      )}
+    </div>
+  );
+};
+
 const SimpleSparkline = ({ data, color }) => {
   const max = Math.max(...data);
   const min = Math.min(...data);
@@ -304,12 +447,31 @@ const MetricCard = ({ label, value, unit, trend, color }) => (
   </div>
 );
 
-const CAMModal = ({ isOpen, onClose, appData }) => {
+const CAMModal = ({
+  isOpen,
+  onClose,
+  appData,
+  analysis,
+  scoreOutput,
+  gstinOutput,
+  fraudNetwork,
+  fraudSummary,
+}) => {
   if (!isOpen) return null;
 
   const companyName = appData?.companyName || 'No application selected';
   const loanAmountText = appData?.loanAmount ? `₹${Number(appData.loanAmount).toLocaleString('en-IN')}` : 'Awaiting request';
   const riskLabel = appData?.riskLevel ? String(appData.riskLevel).toUpperCase() : 'PENDING';
+  const decision = String(scoreOutput?.decision || (riskLabel === 'HIGH' ? 'MANUAL REVIEW' : 'APPROVE')).toUpperCase();
+  const pdPercent = Number(analysis?.risk?.probabilityOfDefault || 0);
+  const ebitdaCurrent = Number(analysis?.financial?.ebitda?.current || 0);
+  const dscrCurrent = Number(analysis?.financial?.dscr?.current || 0);
+  const currentRatioCurrent = Number(analysis?.financial?.currentRatio?.current || 0);
+  const riskItems = Array.isArray(analysis?.risk?.keyRisks) ? analysis.risk.keyRisks.filter(Boolean).slice(0, 4) : [];
+  const cycleCount = Number(fraudNetwork?.cycle_count || 0);
+  const recommendationTone = decision.includes('APPROVE')
+    ? { bg: 'rgba(45, 212, 160, 0.1)', border: '#2DD4A0', icon: '#2DD4A0' }
+    : { bg: 'rgba(245, 158, 11, 0.12)', border: '#F59E0B', icon: '#F59E0B' };
 
   return (
     <div
@@ -349,6 +511,7 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
             <p style={{ color: '#64748B' }} className="leading-relaxed">
               {companyName} is being evaluated through the connected underwriting workflow for a requested amount of {loanAmountText}.
               The memo combines backend scoring, alternative-signal analysis, and risk review to support a lender-facing decision.
+              Current model decision is {decision} with PD at {pdPercent.toFixed(1)}% and risk band {String(gstinOutput?.risk_band || riskLabel).toUpperCase()}.
             </p>
           </div>
 
@@ -366,7 +529,7 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
                   EBITDA
                 </p>
                 <p className="font-mono font-bold" style={{ color: '#2DD4A0' }}>
-                  ₹85L
+                  {ebitdaCurrent > 0 ? `₹${(ebitdaCurrent / 100000).toFixed(1)}L` : '--'}
                 </p>
               </div>
               <div
@@ -377,7 +540,7 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
                   DSCR
                 </p>
                 <p className="font-mono font-bold" style={{ color: '#2DD4A0' }}>
-                  1.8x
+                  {dscrCurrent > 0 ? `${dscrCurrent.toFixed(1)}x` : '--'}
                 </p>
               </div>
               <div
@@ -388,7 +551,7 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
                   Current Ratio
                 </p>
                 <p className="font-mono font-bold" style={{ color: '#2DD4A0' }}>
-                  2.1x
+                  {currentRatioCurrent > 0 ? `${currentRatioCurrent.toFixed(1)}x` : '--'}
                 </p>
               </div>
             </div>
@@ -400,27 +563,31 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
               Risk Summary
             </h3>
             <div className="space-y-2">
-              <div className="flex items-start gap-2">
-                <AlertTriangle size={16} style={{ color: '#F59E0B', marginTop: '2px' }} />
-                <div>
-                  <p style={{ color: '#F1F5F9' }} className="text-sm">
-                    Customer Concentration
-                  </p>
-                  <p style={{ color: '#64748B' }} className="text-xs">
-                    Top 3 clients represent 35% of revenue
-                  </p>
+              {riskItems.length === 0 && (
+                <p style={{ color: '#64748B' }} className="text-xs">
+                  No dynamic risk drivers available yet for this application snapshot.
+                </p>
+              )}
+              {riskItems.map((item, idx) => (
+                <div key={idx} className="flex items-start gap-2">
+                  <AlertTriangle size={16} style={{ color: '#F59E0B', marginTop: '2px' }} />
+                  <div>
+                    <p style={{ color: '#F1F5F9' }} className="text-sm">
+                      Risk Driver {idx + 1}
+                    </p>
+                    <p style={{ color: '#64748B' }} className="text-xs">
+                      {item}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <AlertTriangle size={16} style={{ color: '#F59E0B', marginTop: '2px' }} />
-                <div>
-                  <p style={{ color: '#F1F5F9' }} className="text-sm">
-                    Key Person Risk
-                  </p>
-                  <p style={{ color: '#64748B' }} className="text-xs">
-                    Dependency on CTO for technical operations
-                  </p>
-                </div>
+              ))}
+              <div className="rounded p-2" style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}>
+                <p style={{ color: '#64748B' }} className="text-xs">
+                  Fraud Network Cycles: <span style={{ color: cycleCount > 0 ? '#EF4444' : '#2DD4A0' }}>{cycleCount}</span>
+                </p>
+                <p style={{ color: '#64748B' }} className="text-xs mt-1">
+                  {fraudSummary || 'No additional fraud summary from backend for this applicant.'}
+                </p>
               </div>
             </div>
           </div>
@@ -429,18 +596,19 @@ const CAMModal = ({ isOpen, onClose, appData }) => {
           <div
             className="p-4 rounded-lg border-l-4"
             style={{
-              backgroundColor: 'rgba(45, 212, 160, 0.1)',
-              borderColor: '#2DD4A0',
+              backgroundColor: recommendationTone.bg,
+              borderColor: recommendationTone.border,
             }}
           >
             <div className="flex items-start gap-2">
-              <CheckCircle2 size={20} style={{ color: '#2DD4A0', marginTop: '2px' }} />
+              <CheckCircle2 size={20} style={{ color: recommendationTone.icon, marginTop: '2px' }} />
               <div>
                 <p style={{ color: '#F1F5F9' }} className="font-bold">
-                  Recommendation: {riskLabel === 'HIGH' ? 'MANUAL REVIEW' : 'APPROVE'}
+                  Recommendation: {decision}
                 </p>
                 <p style={{ color: '#64748B' }} className="text-sm mt-1">
-                  Proposed ticket size is aligned to the connected scoring outputs shown in this workspace.
+                  Recommended loan: {gstinOutput?.recommended_loan_amount ? `₹${Number(gstinOutput.recommended_loan_amount).toLocaleString('en-IN')}` : 'n/a'};
+                  tenure: {gstinOutput?.recommended_tenure_months ? `${gstinOutput.recommended_tenure_months} months` : 'n/a'}.
                   Final sanction, pricing, and collateral terms should be confirmed by the credit committee.
                 </p>
               </div>
@@ -489,6 +657,8 @@ export default function ManagerPage() {
   const [pendingApplications, setPendingApplications] = useState<ManagerApplicationCard[]>([]);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [chatMessages, setChatMessages] = useState<StoredChatMessage[]>([]);
+  const [managerReply, setManagerReply] = useState('');
 
   useEffect(() => {
     setIsClient(true);
@@ -666,6 +836,53 @@ export default function ManagerPage() {
     }
   };
 
+  const loadChatMessages = (applicationId: string) => {
+    if (!applicationId || typeof window === 'undefined') {
+      setChatMessages([]);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+      const scoped = list
+        .filter((item: StoredChatMessage) => item.applicationId === applicationId)
+        .sort((a: StoredChatMessage, b: StoredChatMessage) => String(b.timestamp).localeCompare(String(a.timestamp)));
+      setChatMessages(scoped);
+    } catch {
+      setChatMessages([]);
+    }
+  };
+
+  const handleSendManagerReply = () => {
+    const content = managerReply.trim();
+    if (!content || !selectedAppId || typeof window === 'undefined') {
+      return;
+    }
+
+    const newItem: StoredChatMessage = {
+      id: Date.now(),
+      applicationId: selectedAppId,
+      senderRole: 'manager',
+      senderName: state.currentUser.name || 'Manager',
+      message: content,
+      timestamp: new Date().toLocaleString(),
+    };
+
+    try {
+      const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify([newItem, ...list]));
+    } catch {
+      // Keep manager UI usable even if local storage write fails.
+    }
+
+    setManagerReply('');
+    loadChatMessages(selectedAppId);
+  };
+
   const selectedAssignedApplication = assignedApplications.find((app) => app.id === selectedAppId);
   const backendScoring = selectedAssignedApplication?.backendScoring || state.formData.backendScoring || {};
   const scoringSummary = selectedAssignedApplication?.scoringSummary || {};
@@ -687,6 +904,9 @@ export default function ManagerPage() {
     recommended_loan_amount?: number;
     recommended_tenure_months?: number;
     top_reasons?: string[];
+    fraud_flag?: boolean;
+    fraud_summary?: string;
+    fraud_network?: FraudNetworkPayload;
   } | undefined;
 
   const resolvedScoreOutput = {
@@ -705,11 +925,25 @@ export default function ManagerPage() {
     top_reasons: scoringSummary.top_reasons || gstinOutput?.top_reasons || [],
   };
 
+  const resolvedFraudNetwork: FraudNetworkPayload = gstinOutput?.fraud_network || {
+    nodes: [],
+    edges: [],
+    cycle_count: 0,
+  };
+
   useEffect(() => {
     if (state.applicationState.applicationId) {
       setSelectedAppId(state.applicationState.applicationId);
     }
   }, [state.applicationState.applicationId]);
+
+  useEffect(() => {
+    if (!isClient || !selectedAppId) {
+      return;
+    }
+
+    loadChatMessages(selectedAppId);
+  }, [isClient, selectedAppId, refreshTick]);
 
   const hasLiveApplication = Boolean(
     state.applicationState.applicationId ||
@@ -1099,7 +1333,7 @@ export default function ManagerPage() {
           className="border-b sticky top-0 flex bg-opacity-95"
           style={{ borderColor: '#1E2A3A', backgroundColor: '#0B0F1A' }}
         >
-          {['credibility', 'financial', 'industry', 'siteReview', 'risk'].map((tab) => (
+          {['credibility', 'financial', 'industry', 'siteReview', 'risk', 'chat'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1418,39 +1652,122 @@ export default function ManagerPage() {
           )}
 
           {activeTab === 'risk' && (
-            <div className="grid grid-cols-2 gap-6">
-              <RiskGauge probabilityOfDefault={aiAnalysis.risk.probabilityOfDefault} />
-              <div className="space-y-4">
-                <div
-                  className="rounded-lg p-4 animate-in fade-in duration-300"
-                  style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
-                >
-                  <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">
-                    Collateral
-                  </p>
-                  <p className="font-mono text-lg" style={{ color: '#D4A843' }}>
-                    ₹{(aiAnalysis.risk.collateralValue / 100000).toFixed(1)}L
-                  </p>
-                  <p style={{ color: '#64748B' }} className="text-xs mt-1">
-                    {(aiAnalysis.risk.collateralValue / aiAnalysis.risk.loanAmount).toFixed(1)}x LTV
-                  </p>
-                </div>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <RiskGauge probabilityOfDefault={aiAnalysis.risk.probabilityOfDefault} />
+                <div className="space-y-4">
+                  <div
+                    className="rounded-lg p-4 animate-in fade-in duration-300"
+                    style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
+                  >
+                    <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">
+                      Collateral
+                    </p>
+                    <p className="font-mono text-lg" style={{ color: '#D4A843' }}>
+                      ₹{(aiAnalysis.risk.collateralValue / 100000).toFixed(1)}L
+                    </p>
+                    <p style={{ color: '#64748B' }} className="text-xs mt-1">
+                      {(aiAnalysis.risk.collateralValue / aiAnalysis.risk.loanAmount).toFixed(1)}x LTV
+                    </p>
+                  </div>
 
-                <div>
-                  <h4 className="font-bold mb-2" style={{ color: '#F1F5F9' }}>
-                    Key Risks
-                  </h4>
-                  <div className="space-y-2">
-                    {aiAnalysis.risk.keyRisks.map((risk, idx) => (
-                      <div key={idx} className="flex items-start gap-2">
-                        <AlertTriangle size={14} style={{ color: '#F59E0B', marginTop: '2px', flexShrink: 0 }} />
-                        <p style={{ color: '#64748B' }} className="text-xs">
-                          {risk}
-                        </p>
-                      </div>
-                    ))}
+                  <div>
+                    <h4 className="font-bold mb-2" style={{ color: '#F1F5F9' }}>
+                      Key Risks
+                    </h4>
+                    <div className="space-y-2">
+                      {aiAnalysis.risk.keyRisks.map((risk, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <AlertTriangle size={14} style={{ color: '#F59E0B', marginTop: '2px', flexShrink: 0 }} />
+                          <p style={{ color: '#64748B' }} className="text-xs">
+                            {risk}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
+              </div>
+
+              <FraudNetworkGraph network={resolvedFraudNetwork} fraudSummary={gstinOutput?.fraud_summary} />
+            </div>
+          )}
+
+          {activeTab === 'chat' && (
+            <div className="space-y-4">
+              <div
+                className="rounded-lg p-4"
+                style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
+              >
+                <p style={{ color: '#64748B' }} className="text-xs uppercase mb-2">
+                  Application Chat
+                </p>
+                <p style={{ color: '#F1F5F9' }} className="text-sm">
+                  Thread for: {selectedApp?.companyName || 'No application selected'} ({selectedAppId || 'N/A'})
+                </p>
+              </div>
+
+              <div
+                className="rounded-lg p-4 space-y-3 max-h-[360px] overflow-y-auto"
+                style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
+              >
+                {!chatMessages.length && (
+                  <p style={{ color: '#64748B' }} className="text-sm">
+                    No messages yet for this application.
+                  </p>
+                )}
+
+                {chatMessages.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-lg p-3"
+                    style={{
+                      backgroundColor: item.senderRole === 'manager' ? 'rgba(212, 168, 67, 0.16)' : 'rgba(30, 42, 58, 0.9)',
+                      border: '1px solid #1E2A3A',
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p style={{ color: '#D4A843' }} className="text-xs font-semibold uppercase">
+                        {item.senderName} ({item.senderRole})
+                      </p>
+                      <p style={{ color: '#94A3B8' }} className="text-xs">{item.timestamp}</p>
+                    </div>
+                    {item.subject ? (
+                      <p style={{ color: '#F1F5F9' }} className="text-sm font-semibold">{item.subject}</p>
+                    ) : null}
+                    <p style={{ color: '#F1F5F9' }} className="text-sm mt-1">{item.message}</p>
+                    {item.attachmentName ? (
+                      <p style={{ color: '#94A3B8' }} className="text-xs mt-2">Attachment: {item.attachmentName}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                <textarea
+                  value={managerReply}
+                  onChange={(e) => setManagerReply(e.target.value)}
+                  rows={3}
+                  placeholder="Reply to borrower..."
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    backgroundColor: '#0B0F1A',
+                    borderColor: '#1E2A3A',
+                    color: '#F1F5F9',
+                  }}
+                />
+                <button
+                  onClick={handleSendManagerReply}
+                  disabled={!managerReply.trim() || !selectedAppId}
+                  className="px-5 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                  style={{
+                    backgroundColor: '#D4A843',
+                    color: '#0B0F1A',
+                  }}
+                >
+                  <Send size={14} />
+                  Send Reply
+                </button>
               </div>
             </div>
           )}
@@ -1590,7 +1907,16 @@ export default function ManagerPage() {
       </div>
 
       {/* CAM Modal */}
-      <CAMModal isOpen={showCAMModal} onClose={() => setShowCAMModal(false)} appData={selectedApp} />
+      <CAMModal
+        isOpen={showCAMModal}
+        onClose={() => setShowCAMModal(false)}
+        appData={selectedApp}
+        analysis={aiAnalysis}
+        scoreOutput={resolvedScoreOutput}
+        gstinOutput={resolvedGstinOutput}
+        fraudNetwork={resolvedFraudNetwork}
+        fraudSummary={gstinOutput?.fraud_summary}
+      />
     </div>
   );
 }

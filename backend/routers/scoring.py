@@ -2,24 +2,44 @@
 Scoring API endpoints for hybrid credit scoring and risk assessment.
 """
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from schemas.models import (
-    ScoringRequest,
-    ScoringResponse,
-    HealthResponse,
-    ExtractionResponse,
-    GstinScoreRequest,
-    GstinScoreResponse,
-    ApplicationSubmitRequest,
-    ApplicationSubmitResponse,
-    ApplicationListResponse,
-    ApplicationAcceptRequest,
-    ApplicationAcceptResponse,
-    ManagerDashboardResponse,
-)
-from services.scoring_engine import ScoringEngine
-from services.document_extractor import MockDocumentExtractor
-from services.gstin_scoring_service import GstinScoringService
-from services.application_assignment_service import ApplicationAssignmentService
+try:
+    from ..schemas.models import (
+        ScoringRequest,
+        ScoringResponse,
+        HealthResponse,
+        ExtractionResponse,
+        GstinScoreRequest,
+        GstinScoreResponse,
+        ApplicationSubmitRequest,
+        ApplicationSubmitResponse,
+        ApplicationListResponse,
+        ApplicationAcceptRequest,
+        ApplicationAcceptResponse,
+        ManagerDashboardResponse,
+    )
+    from ..services.scoring_engine import ScoringEngine
+    from ..services.document_extractor import MockDocumentExtractor
+    from ..services.gstin_scoring_service import GstinScoringService
+    from ..services.application_assignment_service import ApplicationAssignmentService
+except ImportError:  # pragma: no cover - fallback for direct execution
+    from schemas.models import (
+        ScoringRequest,
+        ScoringResponse,
+        HealthResponse,
+        ExtractionResponse,
+        GstinScoreRequest,
+        GstinScoreResponse,
+        ApplicationSubmitRequest,
+        ApplicationSubmitResponse,
+        ApplicationListResponse,
+        ApplicationAcceptRequest,
+        ApplicationAcceptResponse,
+        ManagerDashboardResponse,
+    )
+    from services.scoring_engine import ScoringEngine
+    from services.document_extractor import MockDocumentExtractor
+    from services.gstin_scoring_service import GstinScoringService
+    from services.application_assignment_service import ApplicationAssignmentService
 
 router = APIRouter()
 engine = ScoringEngine()

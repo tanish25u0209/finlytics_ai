@@ -41,3 +41,43 @@ Run the extractor:
 ```bash
 python mock_pdfs/mock_extractor.py
 ```
+
+## Package Subfolders (5 Sets)
+
+To support multiple mock scenarios, `mock_pdfs/packages/` now contains 5 small packages.
+Each package has the same 4 expected filenames and its own `expected_output.json`.
+
+Packages:
+
+- `package_01_baseline`
+  - Balanced baseline applicant
+- `package_02_strong`
+  - Strong applicant profile
+- `package_03_medium`
+  - Medium-risk profile
+- `package_04_risky`
+  - High-risk profile
+- `package_05_mixed_edge`
+  - Mixed edge-case profile (high revenue + very new business age)
+
+Each package includes:
+
+- `bank_statement_sample.pdf`
+- `gst_filing_sample.pdf`
+- `incorporation_certificate_sample.pdf`
+- `loan_history_disputes_sample.pdf`
+- `expected_output.json`
+
+Run extractor for a specific package:
+
+```bash
+python mock_pdfs/mock_extractor.py --package-dir mock_pdfs/packages/package_01_baseline
+```
+
+Batch-generate outputs for all packages:
+
+```bash
+for d in mock_pdfs/packages/*; do
+  python mock_pdfs/mock_extractor.py --package-dir "$d" > "$d/expected_output.json"
+done
+```

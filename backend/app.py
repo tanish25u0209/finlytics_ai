@@ -5,7 +5,10 @@ Entry point for the deterministic credit scoring backend.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import scoring
+try:
+    from .routers import scoring
+except ImportError:  # pragma: no cover - fallback for direct execution
+    from routers import scoring
 
 # Initialize FastAPI app
 app = FastAPI(

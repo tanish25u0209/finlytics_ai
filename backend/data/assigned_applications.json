@@ -1,5 +1,870 @@
 [
   {
+    "id": "APP-PKG-1775262507-05",
+    "borrowerEmail": "pkg5.1775262507@example.com",
+    "borrowerName": "Borrower package_05_mixed_edge",
+    "managerEmail": "manager.one@finlytics.ai",
+    "managerName": "Manager One",
+    "companyName": "package_05_mixed_edge Pvt Ltd",
+    "loanAmount": 1200000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 70,
+    "createdAt": "2026-04-04T00:00:00Z",
+    "updatedAt": "2026-04-04T00:28:27.629886+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T00:28:27.629886+00:00",
+    "backendScoring": {
+      "gstinResult": {
+        "gstin": "29ABCDE1007Z7",
+        "credit_score": 304,
+        "risk_band": "High Risk",
+        "risk_score": 1.0,
+        "probability_of_default": 0.99,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "GST filing regularity is weak, which reduces confidence in current operations.",
+          "Transaction cadence is thin, suggesting limited current business activity.",
+          "GST filings are frequently delayed, increasing repayment risk.",
+          "Only partial live signal coverage is available, so score confidence is lower."
+        ],
+        "recommended_loan_amount": 50000.0,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.9,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1011Z1, 29ABCDE1019Z9, 29ABCDE1024Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1011Z1",
+          "29ABCDE1019Z9",
+          "29ABCDE1024Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1007Z7",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1011Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1019Z9",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1024Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1007Z7",
+              "to_gstin": "29ABCDE1011Z1",
+              "monthly_flow_inr": 410000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1011Z1",
+              "to_gstin": "29ABCDE1019Z9",
+              "monthly_flow_inr": 388000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1019Z9",
+              "to_gstin": "29ABCDE1024Z4",
+              "monthly_flow_inr": 362000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1024Z4",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 377000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1019Z9",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 401000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1011Z1",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 405000.0,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 6
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0.0
+        },
+        "score_freshness_timestamp": "2026-04-04T00:28:27.599363+00:00"
+      },
+      "scoreResult": {
+        "rule_score": 75.0,
+        "pd": 0.1188,
+        "final_score": 82.87,
+        "risk_category": "Medium Risk",
+        "decision": "Manual Review",
+        "key_factors": {
+          "positive": [
+            "Revenue \u20b91,500,000 supports business sustainability",
+            "Debt ratio 0.02 indicates minimal leverage risk",
+            "EMI ratio 0.01 indicates strong repayment capacity",
+            "GST compliance reduces regulatory risk"
+          ],
+          "negative": [
+            "Business age 8 months indicates high instability"
+          ]
+        }
+      },
+      "extractedPayload": {
+        "monthly_revenue": 1500000,
+        "emi": 20000,
+        "total_debt": 300000,
+        "gst_compliant": true,
+        "business_age_months": 8,
+        "has_disputes": false
+      },
+      "processedDocuments": [
+        {
+          "document_type": "package_bundle",
+          "status": "parsed"
+        }
+      ]
+    },
+    "documents": [
+      {
+        "name": "bank_statement_sample.pdf",
+        "size": 10001
+      },
+      {
+        "name": "gst_filing_sample.pdf",
+        "size": 10002
+      },
+      {
+        "name": "incorporation_certificate_sample.pdf",
+        "size": 10003
+      },
+      {
+        "name": "loan_history_disputes_sample.pdf",
+        "size": 10004
+      }
+    ]
+  },
+  {
+    "id": "APP-PKG-1775262507-04",
+    "borrowerEmail": "pkg4.1775262507@example.com",
+    "borrowerName": "Borrower package_04_risky",
+    "managerEmail": "manager.one@finlytics.ai",
+    "managerName": "Manager One",
+    "companyName": "package_04_risky Pvt Ltd",
+    "loanAmount": 72000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 70,
+    "createdAt": "2026-04-04T00:00:00Z",
+    "updatedAt": "2026-04-04T00:28:27.506716+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T00:28:27.506716+00:00",
+    "backendScoring": {
+      "gstinResult": {
+        "gstin": "29ABCDE1007Z7",
+        "credit_score": 304,
+        "risk_band": "High Risk",
+        "risk_score": 1.0,
+        "probability_of_default": 0.99,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "GST filing regularity is weak, which reduces confidence in current operations.",
+          "Transaction cadence is thin, suggesting limited current business activity.",
+          "GST filings are frequently delayed, increasing repayment risk.",
+          "Only partial live signal coverage is available, so score confidence is lower."
+        ],
+        "recommended_loan_amount": 50000.0,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.9,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1011Z1, 29ABCDE1019Z9, 29ABCDE1024Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1011Z1",
+          "29ABCDE1019Z9",
+          "29ABCDE1024Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1007Z7",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1011Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1019Z9",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1024Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1007Z7",
+              "to_gstin": "29ABCDE1011Z1",
+              "monthly_flow_inr": 410000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1011Z1",
+              "to_gstin": "29ABCDE1019Z9",
+              "monthly_flow_inr": 388000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1019Z9",
+              "to_gstin": "29ABCDE1024Z4",
+              "monthly_flow_inr": 362000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1024Z4",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 377000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1019Z9",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 401000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1011Z1",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 405000.0,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 6
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0.0
+        },
+        "score_freshness_timestamp": "2026-04-04T00:28:27.477233+00:00"
+      },
+      "scoreResult": {
+        "rule_score": 0.0,
+        "pd": 0.6,
+        "final_score": 24.0,
+        "risk_category": "High Risk",
+        "decision": "Reject",
+        "key_factors": {
+          "positive": [],
+          "negative": [
+            "Debt ratio 1.48 indicates high leverage risk"
+          ]
+        }
+      },
+      "extractedPayload": {
+        "monthly_revenue": 90000,
+        "emi": 60000,
+        "total_debt": 1600000,
+        "gst_compliant": false,
+        "business_age_months": 8,
+        "has_disputes": true
+      },
+      "processedDocuments": [
+        {
+          "document_type": "package_bundle",
+          "status": "parsed"
+        }
+      ]
+    },
+    "documents": [
+      {
+        "name": "bank_statement_sample.pdf",
+        "size": 10001
+      },
+      {
+        "name": "gst_filing_sample.pdf",
+        "size": 10002
+      },
+      {
+        "name": "incorporation_certificate_sample.pdf",
+        "size": 10003
+      },
+      {
+        "name": "loan_history_disputes_sample.pdf",
+        "size": 10004
+      }
+    ]
+  },
+  {
+    "id": "APP-PKG-1775262507-03",
+    "borrowerEmail": "pkg3.1775262507@example.com",
+    "borrowerName": "Borrower package_03_medium",
+    "managerEmail": "manager.one@finlytics.ai",
+    "managerName": "Manager One",
+    "companyName": "package_03_medium Pvt Ltd",
+    "loanAmount": 200000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 70,
+    "createdAt": "2026-04-04T00:00:00Z",
+    "updatedAt": "2026-04-04T00:28:27.382090+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T00:28:27.382090+00:00",
+    "backendScoring": {
+      "gstinResult": {
+        "gstin": "29ABCDE1000Z0",
+        "credit_score": 411,
+        "risk_band": "High Risk",
+        "risk_score": 21.03,
+        "probability_of_default": 0.7897,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "Inflow-to-outflow ratio is weak, suggesting tighter repayment capacity.",
+          "Net cash retained after outflows is weak, limiting internal repayment cushion.",
+          "Cash-flow health is weak after accounting for volatility.",
+          "GST filings are frequently delayed, increasing repayment risk."
+        ],
+        "recommended_loan_amount": 50000.0,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.825,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1001Z1, 29ABCDE1004Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1001Z1",
+          "29ABCDE1004Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1000Z0",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1001Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1004Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1000Z0",
+              "to_gstin": "29ABCDE1001Z1",
+              "monthly_flow_inr": 185000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1001Z1",
+              "to_gstin": "29ABCDE1004Z4",
+              "monthly_flow_inr": 91000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1004Z4",
+              "to_gstin": "29ABCDE1000Z0",
+              "monthly_flow_inr": 43000.0,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 3
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0.0
+        },
+        "score_freshness_timestamp": "2026-04-04T00:28:27.351158+00:00"
+      },
+      "scoreResult": {
+        "rule_score": 75.0,
+        "pd": 0.262,
+        "final_score": 74.28,
+        "risk_category": "High Risk",
+        "decision": "Reject",
+        "key_factors": {
+          "positive": [
+            "Revenue \u20b9250,000 supports business sustainability",
+            "Debt ratio 0.30 indicates minimal leverage risk",
+            "EMI ratio 0.22 indicates strong repayment capacity",
+            "GST compliance reduces regulatory risk"
+          ],
+          "negative": [
+            "Business age 18 months indicates limited operating history"
+          ]
+        }
+      },
+      "extractedPayload": {
+        "monthly_revenue": 250000,
+        "emi": 55000,
+        "total_debt": 900000,
+        "gst_compliant": true,
+        "business_age_months": 18,
+        "has_disputes": false
+      },
+      "processedDocuments": [
+        {
+          "document_type": "package_bundle",
+          "status": "parsed"
+        }
+      ]
+    },
+    "documents": [
+      {
+        "name": "bank_statement_sample.pdf",
+        "size": 10001
+      },
+      {
+        "name": "gst_filing_sample.pdf",
+        "size": 10002
+      },
+      {
+        "name": "incorporation_certificate_sample.pdf",
+        "size": 10003
+      },
+      {
+        "name": "loan_history_disputes_sample.pdf",
+        "size": 10004
+      }
+    ]
+  },
+  {
+    "id": "APP-PKG-1775262507-02",
+    "borrowerEmail": "pkg2.1775262507@example.com",
+    "borrowerName": "Borrower package_02_strong",
+    "managerEmail": "manager.one@finlytics.ai",
+    "managerName": "Manager One",
+    "companyName": "package_02_strong Pvt Ltd",
+    "loanAmount": 1200000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 70,
+    "createdAt": "2026-04-04T00:00:00Z",
+    "updatedAt": "2026-04-04T00:28:27.258780+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T00:28:27.258780+00:00",
+    "backendScoring": {
+      "gstinResult": {
+        "gstin": "29ABCDE1000Z0",
+        "credit_score": 411,
+        "risk_band": "High Risk",
+        "risk_score": 21.03,
+        "probability_of_default": 0.7897,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "Inflow-to-outflow ratio is weak, suggesting tighter repayment capacity.",
+          "Net cash retained after outflows is weak, limiting internal repayment cushion.",
+          "Cash-flow health is weak after accounting for volatility.",
+          "GST filings are frequently delayed, increasing repayment risk."
+        ],
+        "recommended_loan_amount": 50000.0,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.825,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1001Z1, 29ABCDE1004Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1001Z1",
+          "29ABCDE1004Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1000Z0",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1001Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1004Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1000Z0",
+              "to_gstin": "29ABCDE1001Z1",
+              "monthly_flow_inr": 185000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1001Z1",
+              "to_gstin": "29ABCDE1004Z4",
+              "monthly_flow_inr": 91000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1004Z4",
+              "to_gstin": "29ABCDE1000Z0",
+              "monthly_flow_inr": 43000.0,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 3
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0.0
+        },
+        "score_freshness_timestamp": "2026-04-04T00:28:27.217059+00:00"
+      },
+      "scoreResult": {
+        "rule_score": 95.0,
+        "pd": 0.0388,
+        "final_score": 95.67,
+        "risk_category": "Low Risk",
+        "decision": "Approve",
+        "key_factors": {
+          "positive": [
+            "Revenue \u20b91,500,000 supports business sustainability",
+            "Debt ratio 0.02 indicates minimal leverage risk",
+            "EMI ratio 0.01 indicates strong repayment capacity",
+            "Business age 120 months indicates high stability",
+            "GST compliance reduces regulatory risk"
+          ],
+          "negative": []
+        }
+      },
+      "extractedPayload": {
+        "monthly_revenue": 1500000,
+        "emi": 20000,
+        "total_debt": 300000,
+        "gst_compliant": true,
+        "business_age_months": 120,
+        "has_disputes": false
+      },
+      "processedDocuments": [
+        {
+          "document_type": "package_bundle",
+          "status": "parsed"
+        }
+      ]
+    },
+    "documents": [
+      {
+        "name": "bank_statement_sample.pdf",
+        "size": 10001
+      },
+      {
+        "name": "gst_filing_sample.pdf",
+        "size": 10002
+      },
+      {
+        "name": "incorporation_certificate_sample.pdf",
+        "size": 10003
+      },
+      {
+        "name": "loan_history_disputes_sample.pdf",
+        "size": 10004
+      }
+    ]
+  },
+  {
+    "id": "APP-PKG-1775262507-01",
+    "borrowerEmail": "pkg1.1775262507@example.com",
+    "borrowerName": "Borrower package_01_baseline",
+    "managerEmail": "manager.one@finlytics.ai",
+    "managerName": "Manager One",
+    "companyName": "package_01_baseline Pvt Ltd",
+    "loanAmount": 400000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 70,
+    "createdAt": "2026-04-04T00:00:00Z",
+    "updatedAt": "2026-04-04T00:28:27.117597+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T00:28:27.117597+00:00",
+    "backendScoring": {
+      "gstinResult": {
+        "gstin": "29ABCDE1000Z0",
+        "credit_score": 411,
+        "risk_band": "High Risk",
+        "risk_score": 21.03,
+        "probability_of_default": 0.7897,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "Inflow-to-outflow ratio is weak, suggesting tighter repayment capacity.",
+          "Net cash retained after outflows is weak, limiting internal repayment cushion.",
+          "Cash-flow health is weak after accounting for volatility.",
+          "GST filings are frequently delayed, increasing repayment risk."
+        ],
+        "recommended_loan_amount": 50000.0,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.825,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1001Z1, 29ABCDE1004Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1001Z1",
+          "29ABCDE1004Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1000Z0",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1001Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1004Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1000Z0",
+              "to_gstin": "29ABCDE1001Z1",
+              "monthly_flow_inr": 185000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1001Z1",
+              "to_gstin": "29ABCDE1004Z4",
+              "monthly_flow_inr": 91000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1004Z4",
+              "to_gstin": "29ABCDE1000Z0",
+              "monthly_flow_inr": 43000.0,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 3
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0.0
+        },
+        "score_freshness_timestamp": "2026-04-04T00:28:27.087181+00:00"
+      },
+      "scoreResult": {
+        "rule_score": 90.0,
+        "pd": 0.0523,
+        "final_score": 92.86,
+        "risk_category": "Low Risk",
+        "decision": "Approve",
+        "key_factors": {
+          "positive": [
+            "Revenue \u20b9500,000 supports business sustainability",
+            "Debt ratio 0.03 indicates minimal leverage risk",
+            "EMI ratio 0.04 indicates strong repayment capacity",
+            "Business age 48 months indicates high stability",
+            "GST compliance reduces regulatory risk"
+          ],
+          "negative": []
+        }
+      },
+      "extractedPayload": {
+        "monthly_revenue": 500000,
+        "emi": 20000,
+        "total_debt": 200000,
+        "gst_compliant": true,
+        "business_age_months": 48,
+        "has_disputes": false
+      },
+      "processedDocuments": [
+        {
+          "document_type": "package_bundle",
+          "status": "parsed"
+        }
+      ]
+    },
+    "documents": [
+      {
+        "name": "bank_statement_sample.pdf",
+        "size": 10001
+      },
+      {
+        "name": "gst_filing_sample.pdf",
+        "size": 10002
+      },
+      {
+        "name": "incorporation_certificate_sample.pdf",
+        "size": 10003
+      },
+      {
+        "name": "loan_history_disputes_sample.pdf",
+        "size": 10004
+      }
+    ]
+  },
+  {
+    "id": "APP-QA-1775261999",
+    "borrowerEmail": "qa.1775261999@example.com",
+    "borrowerName": "QA Borrower",
+    "managerEmail": "manager.one@finlytics.ai",
+    "managerName": "Manager One",
+    "companyName": "QA Live Check Pvt Ltd",
+    "loanAmount": 450000.0,
+    "riskLevel": "medium",
+    "currentStage": "submitted",
+    "credibilityScore": 71,
+    "createdAt": "2026-04-04T00:00:00Z",
+    "updatedAt": "2026-04-04T00:19:59.819906+00:00",
+    "assignmentStatus": "accepted",
+    "acceptedAt": "2026-04-04T00:19:59.819906+00:00",
+    "backendScoring": {
+      "gstinResult": {
+        "gstin": "29ABCDE1007Z7",
+        "credit_score": 304,
+        "risk_band": "High Risk",
+        "risk_score": 1.0,
+        "probability_of_default": 0.99,
+        "risk_category": "HIGH",
+        "top_reasons": [
+          "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
+          "GST filing regularity is weak, which reduces confidence in current operations.",
+          "Transaction cadence is thin, suggesting limited current business activity.",
+          "GST filings are frequently delayed, increasing repayment risk.",
+          "Only partial live signal coverage is available, so score confidence is lower."
+        ],
+        "recommended_loan_amount": 50000.0,
+        "recommended_tenure_months": 6,
+        "fraud_flag": true,
+        "fraud_score": 0.9,
+        "fraud_summary": "High-risk circular transaction topology detected. Funds appear to rotate repeatedly between linked GSTINs (29ABCDE1011Z1, 29ABCDE1019Z9, 29ABCDE1024Z4), which may indicate score inflation through synthetic UPI activity.",
+        "linked_gstins": [
+          "29ABCDE1011Z1",
+          "29ABCDE1019Z9",
+          "29ABCDE1024Z4"
+        ],
+        "fraud_network": {
+          "nodes": [
+            {
+              "gstin": "29ABCDE1007Z7",
+              "role": "subject"
+            },
+            {
+              "gstin": "29ABCDE1011Z1",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1019Z9",
+              "role": "ring_member"
+            },
+            {
+              "gstin": "29ABCDE1024Z4",
+              "role": "ring_member"
+            }
+          ],
+          "edges": [
+            {
+              "from_gstin": "29ABCDE1007Z7",
+              "to_gstin": "29ABCDE1011Z1",
+              "monthly_flow_inr": 410000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1011Z1",
+              "to_gstin": "29ABCDE1019Z9",
+              "monthly_flow_inr": 388000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1019Z9",
+              "to_gstin": "29ABCDE1024Z4",
+              "monthly_flow_inr": 362000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1024Z4",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 377000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1019Z9",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 401000.0,
+              "in_cycle": true
+            },
+            {
+              "from_gstin": "29ABCDE1011Z1",
+              "to_gstin": "29ABCDE1007Z7",
+              "monthly_flow_inr": 405000.0,
+              "in_cycle": true
+            }
+          ],
+          "cycle_count": 6
+        },
+        "amnesty_policy": {
+          "active": false,
+          "window_start": null,
+          "window_end": null,
+          "pd_relief": 0.0
+        },
+        "score_freshness_timestamp": "2026-04-04T00:19:59.715437+00:00"
+      },
+      "scoreResult": {
+        "rule_score": 90.0,
+        "pd": 0.0523,
+        "final_score": 92.86,
+        "risk_category": "Low Risk",
+        "decision": "Approve",
+        "key_factors": {
+          "positive": [
+            "Revenue \u20b9500,000 supports business sustainability",
+            "Debt ratio 0.03 indicates minimal leverage risk",
+            "EMI ratio 0.04 indicates strong repayment capacity",
+            "Business age 48 months indicates high stability",
+            "GST compliance reduces regulatory risk"
+          ],
+          "negative": []
+        }
+      },
+      "extractedPayload": {
+        "monthly_revenue": 500000,
+        "total_debt": 200000,
+        "monthly_emi": 20000,
+        "business_age_months": 48,
+        "gst_compliant": true,
+        "has_disputes": false
+      },
+      "processedDocuments": [
+        {
+          "document_type": "bank_statement",
+          "status": "parsed"
+        }
+      ]
+    },
+    "documents": [
+      {
+        "name": "bank_statement_sample.pdf",
+        "size": 12345
+      }
+    ]
+  },
+  {
     "id": "FAIM-DEMO-00001",
     "borrowerEmail": "owner@msme.com",
     "borrowerName": "Aarav Enterprises",

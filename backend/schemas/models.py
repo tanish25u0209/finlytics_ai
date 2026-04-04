@@ -113,6 +113,14 @@ class GstinScoreResponse(BaseModel):
     fraud_score: float = Field(..., ge=0, le=1, description="Fraud risk score derived from mocked transaction topology")
     fraud_summary: str = Field(..., description="Plain-language explanation of the fraud assessment")
     linked_gstins: List[str] = Field(default_factory=list, description="Linked GSTINs involved in the mocked transaction network")
+    fraud_network: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Graph payload containing nodes, edges, and detected cycle count for fraud topology visualization",
+    )
+    amnesty_policy: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Active GST amnesty window metadata and runtime PD relief applied without retraining",
+    )
     score_freshness_timestamp: str
 
 

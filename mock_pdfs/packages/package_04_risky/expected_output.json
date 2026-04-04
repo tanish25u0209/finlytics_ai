@@ -1,0 +1,30 @@
+{
+  "documents": {
+    "bank_statement": {
+      "monthly_revenue": 90000,
+      "emi": 60000,
+      "total_debt": 1600000,
+      "source_document": "bank_statement_sample.pdf"
+    },
+    "gst_filing": {
+      "gst_compliant": false,
+      "source_document": "gst_filing_sample.pdf"
+    },
+    "incorporation_certificate": {
+      "business_age_months": 8,
+      "source_document": "incorporation_certificate_sample.pdf"
+    },
+    "loan_history": {
+      "has_disputes": true,
+      "source_document": "loan_history_disputes_sample.pdf"
+    }
+  },
+  "scoring_payload": {
+    "monthly_revenue": 90000,
+    "emi": 60000,
+    "total_debt": 1600000,
+    "gst_compliant": false,
+    "business_age_months": 8,
+    "has_disputes": true
+  }
+}

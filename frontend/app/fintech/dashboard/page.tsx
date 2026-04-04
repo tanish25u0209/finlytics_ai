@@ -5,7 +5,21 @@ import {
   FileText, Clock, CheckCircle2, AlertCircle, Download, Upload, Send,
   MessageSquare, Paperclip, Eye, X, Plus
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const CHAT_STORAGE_KEY = 'finserv-aim-chat-messages';
+
+type StoredChatMessage = {
+  id: number;
+  applicationId: string;
+  senderRole: 'borrower' | 'manager';
+  senderName: string;
+  subject?: string;
+  message: string;
+  attachmentName?: string;
+  timestamp: string;
+};
 
 const STAGES = [
   { id: 'submitted', label: 'Application Received', icon: FileText },
@@ -45,29 +59,215 @@ export default function DashboardPage() {
   const { state, dispatch } = useAppContext();
   const { applicationState, documents, notifications, formData } = state;
   const [mounted, setMounted] = useState(false);
+  const [borrowerApplications, setBorrowerApplications] = useState<any[]>([]);
+  const [scorePreview, setScorePreview] = useState<any | null>(null);
+  const [gstinPreview, setGstinPreview] = useState<any | null>(null);
+  const [actionMessage, setActionMessage] = useState<string>('');
+  const [isScoring, setIsScoring] = useState(false);
+  const [isGstinScoring, setIsGstinScoring] = useState(false);
   const [activeTab, setActiveTab] = useState<'lifecycle' | 'disbursement'>('lifecycle');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [querySubject, setQuerySubject] = useState('');
   const [queryMessage, setQueryMessage] = useState('');
+  const [attachedDocumentName, setAttachedDocumentName] = useState('');
+  const [negotiationEntries, setNegotiationEntries] = useState<Array<{ id: number; sender: string; message: string; timestamp: string; type: 'query' | 'response' }>>([]);
   const [utilizationReport, setUtilizationReport] = useState('');
+  const queryAttachmentInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const backendScoring = formData.backendScoring || {};
-  const gstinResult = backendScoring.gstinResult;
-  const scoreResult = backendScoring.scoreResult;
+  useEffect(() => {
+    if (!mounted || !state.currentUser.email) {
+      return;
+    }
 
-  const dashboardDocuments = documents.length
-    ? documents.map((doc, index) => ({
+    let cancelled = false;
+
+    const loadBorrowerApplications = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/applications/borrower/${encodeURIComponent(state.currentUser.email.toLowerCase())}`,
+        );
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        const applications = Array.isArray(data?.applications) ? data.applications : [];
+        applications.sort((a, b) => String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || '')));
+        if (!cancelled) {
+          setBorrowerApplications(applications);
+        }
+      } catch {
+        // Keep local state fallback when API is unavailable.
+      }
+    };
+
+    void loadBorrowerApplications();
+    const intervalId = window.setInterval(() => {
+      void loadBorrowerApplications();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [mounted, state.currentUser.email]);
+
+  const normalizeStage = (value?: string) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+
+  const selectedBorrowerApplication = borrowerApplications.find(
+    (item) => item?.id === applicationState.applicationId,
+  ) || borrowerApplications[0] || null;
+
+  const syncedApplicationState = {
+    applicationId: selectedBorrowerApplication?.id || applicationState.applicationId,
+    currentStage: applicationState.currentStage || normalizeStage(selectedBorrowerApplication?.currentStage),
+    submittedAt: selectedBorrowerApplication?.createdAt || applicationState.submittedAt,
+    lastUpdated: applicationState.lastUpdated || selectedBorrowerApplication?.updatedAt,
+  };
+
+  const loadStoredNegotiations = (applicationId: string) => {
+    if (!applicationId || typeof window === 'undefined') {
+      setNegotiationEntries([]);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+
+      const mapped = list
+        .filter((item: StoredChatMessage) => item.applicationId === applicationId)
+        .sort((a: StoredChatMessage, b: StoredChatMessage) => String(b.timestamp).localeCompare(String(a.timestamp)))
+        .map((item: StoredChatMessage) => ({
+          id: item.id,
+          sender: item.senderRole === 'manager' ? item.senderName || 'Manager' : 'You',
+          message: `${item.subject ? `${item.subject}: ` : ''}${item.message}${item.attachmentName ? ` [Attachment: ${item.attachmentName}]` : ''}`,
+          timestamp: item.timestamp,
+          type: (item.senderRole === 'manager' ? 'response' : 'query') as 'query' | 'response',
+        }));
+
+      setNegotiationEntries(mapped);
+    } catch {
+      setNegotiationEntries([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!mounted || !syncedApplicationState.applicationId) {
+      return;
+    }
+
+    loadStoredNegotiations(String(syncedApplicationState.applicationId));
+
+    const intervalId = window.setInterval(() => {
+      loadStoredNegotiations(String(syncedApplicationState.applicationId));
+    }, 3000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [mounted, syncedApplicationState.applicationId]);
+
+  const backendScoring = selectedBorrowerApplication?.backendScoring || formData.backendScoring || {};
+  const gstinResult = gstinPreview || backendScoring.gstinResult;
+  const scoreResult = scorePreview || backendScoring.scoreResult;
+
+  const buildScoringPayload = () => {
+    const extractedPayload = backendScoring?.extractedPayload || {};
+    return {
+      monthly_revenue: Number(extractedPayload.monthly_revenue ?? 0),
+      total_debt: Number(extractedPayload.total_debt ?? 0),
+      emi: Number(extractedPayload.emi ?? extractedPayload.monthly_emi ?? 0),
+      business_age_months: Number(extractedPayload.business_age_months ?? 0),
+      gst_compliant: Boolean(extractedPayload.gst_compliant),
+      has_disputes: Boolean(extractedPayload.has_disputes),
+    };
+  };
+
+  const handleScoreDocuments = async () => {
+    setActionMessage('');
+    setIsScoring(true);
+    try {
+      const payload = buildScoringPayload();
+      const hasSignals = Object.values(payload).some((value) => (typeof value === 'number' ? value > 0 : value));
+      if (!hasSignals) {
+        setActionMessage('No extracted payload found. Please upload/score documents in Apply first.');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/calculate-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        setActionMessage('Score calculation failed. Please try again.');
+        return;
+      }
+
+      const result = await response.json();
+      setScorePreview(result);
+      setActionMessage(`Documents scored. Decision: ${result.decision} | Final Score: ${Number(result.final_score).toFixed(2)}`);
+    } catch {
+      setActionMessage('Unable to reach scoring service right now.');
+    } finally {
+      setIsScoring(false);
+    }
+  };
+
+  const handleGetExplainableScore = async () => {
+    setActionMessage('');
+    setIsGstinScoring(true);
+    try {
+      const gstin = backendScoring?.gstinResult?.gstin;
+      if (!gstin) {
+        setActionMessage('No GSTIN found for this application yet.');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/gstin-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gstin }),
+      });
+      if (!response.ok) {
+        setActionMessage('Explainable GSTIN score failed. Please try again.');
+        return;
+      }
+
+      const result = await response.json();
+      setGstinPreview(result);
+      setActionMessage(`Explainable score ready. Credit Score: ${result.credit_score} | Risk Band: ${result.risk_band}`);
+    } catch {
+      setActionMessage('Unable to fetch explainable score right now.');
+    } finally {
+      setIsGstinScoring(false);
+    }
+  };
+
+  const dashboardDocuments = selectedBorrowerApplication?.documents?.length
+    ? selectedBorrowerApplication.documents.map((doc: any, index: number) => ({
+        id: index + 1,
+        name: doc.name || `Document ${index + 1}`,
+        type: doc.type || 'Uploaded',
+        uploadedOn: mounted && syncedApplicationState.lastUpdated ? new Date(syncedApplicationState.lastUpdated).toLocaleDateString() : syncedApplicationState.lastUpdated,
+        status: doc.status === 'approved' ? 'Verified' : doc.status === 'pending' ? 'Pending' : 'Uploaded',
+      }))
+    : documents.length
+      ? documents.map((doc, index) => ({
         id: index + 1,
         name: doc.name,
         type: doc.type,
         uploadedOn: mounted ? new Date(doc.uploadedAt).toLocaleDateString() : doc.uploadedAt,
         status: doc.status === 'approved' ? 'Verified' : doc.status === 'pending' ? 'Pending' : 'Rejected',
       }))
-    : [];
+      : [];
 
   const dashboardNotifications = notifications.length
     ? notifications.map((notif, index) => ({
@@ -88,14 +288,71 @@ export default function DashboardPage() {
           timestamp: mounted ? new Date(gstinResult.score_freshness_timestamp).toLocaleString() : gstinResult.score_freshness_timestamp,
           type: 'response',
         },
+        ...negotiationEntries,
       ]
-    : [];
+    : negotiationEntries;
+
+  const handleAttachDocument = () => {
+    queryAttachmentInputRef.current?.click();
+  };
+
+  const handleSelectQueryAttachment = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    setAttachedDocumentName(file.name);
+    setActionMessage(`Attached document: ${file.name}`);
+  };
+
+  const handleSendQuery = () => {
+    const subject = querySubject.trim();
+    const message = queryMessage.trim();
+
+    if (!subject || !message) {
+      setActionMessage('Please enter both subject and message before sending your query.');
+      return;
+    }
+
+    const applicationId = String(syncedApplicationState.applicationId || 'APP-LOCAL');
+    const timestamp = new Date().toLocaleString();
+    const storedItem: StoredChatMessage = {
+      id: Date.now(),
+      applicationId,
+      senderRole: 'borrower',
+      senderName: state.currentUser.name || 'Borrower',
+      subject,
+      message,
+      attachmentName: attachedDocumentName || undefined,
+      timestamp,
+    };
+
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const list = Array.isArray(parsed) ? parsed : [];
+        window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify([storedItem, ...list]));
+      }
+    } catch {
+      // Keep UI responsive even if persistence fails.
+    }
+
+    loadStoredNegotiations(applicationId);
+    setQuerySubject('');
+    setQueryMessage('');
+    setAttachedDocumentName('');
+    if (queryAttachmentInputRef.current) {
+      queryAttachmentInputRef.current.value = '';
+    }
+    setActionMessage('Query sent successfully. The manager will see it in the negotiation trail.');
+  };
 
   const submissionHistory = scoreResult
     ? [
         {
           id: 1,
-          date: mounted && applicationState.lastUpdated ? new Date(applicationState.lastUpdated).toLocaleDateString() : applicationState.lastUpdated,
+          date: mounted && syncedApplicationState.lastUpdated ? new Date(syncedApplicationState.lastUpdated).toLocaleDateString() : syncedApplicationState.lastUpdated,
           document: 'Backend Credit Score',
           amount: scoreResult.final_score.toFixed(2),
           status: scoreResult.decision,
@@ -103,7 +360,7 @@ export default function DashboardPage() {
       ]
     : [];
 
-  const currentStageIndex = STAGES.findIndex((s) => s.id === applicationState.currentStage);
+  const currentStageIndex = STAGES.findIndex((s) => s.id === syncedApplicationState.currentStage);
 
   const handleAdvanceStage = () => {
     const nextStageIndex = currentStageIndex + 1;
@@ -126,14 +383,27 @@ export default function DashboardPage() {
         <div className="space-y-2">
           <p style={{ color: '#64748B' }}>
             Application ID: <span className="font-mono" style={{ color: '#D4A843' }}>
-              {applicationState.applicationId || 'Not submitted yet'}
+              {syncedApplicationState.applicationId || 'Not submitted yet'}
             </span>
           </p>
-          {mounted && applicationState.submittedAt && (
+          {mounted && syncedApplicationState.submittedAt && (
             <p style={{ color: '#64748B' }}>
               Submitted: <span style={{ color: '#F1F5F9' }}>
-                {new Date(applicationState.submittedAt).toLocaleString()}
+                {new Date(syncedApplicationState.submittedAt).toLocaleString()}
               </span>
+            </p>
+          )}
+          {selectedBorrowerApplication && (
+            <p style={{ color: '#64748B' }}>
+              Assignment: <span style={{ color: selectedBorrowerApplication.assignmentStatus === 'accepted' ? '#2DD4A0' : '#F59E0B' }}>
+                {String(selectedBorrowerApplication.assignmentStatus || 'pending').toUpperCase()}
+              </span>
+              {selectedBorrowerApplication.managerName ? (
+                <span style={{ color: '#F1F5F9' }}> • Manager: {selectedBorrowerApplication.managerName}</span>
+              ) : null}
+              {scoreResult?.decision ? (
+                <span style={{ color: '#F1F5F9' }}> • Decision: {scoreResult.decision}</span>
+              ) : null}
             </p>
           )}
         </div>
@@ -162,6 +432,15 @@ export default function DashboardPage() {
           Post-Disbursement
         </button>
       </div>
+
+      {actionMessage ? (
+        <div
+          className="mb-6 rounded-lg px-4 py-3 text-sm"
+          style={{ backgroundColor: 'rgba(212, 168, 67, 0.12)', border: '1px solid #D4A843', color: '#F1F5F9' }}
+        >
+          {actionMessage}
+        </div>
+      ) : null}
 
       {activeTab === 'lifecycle' && (
         <div className="space-y-8">
@@ -230,6 +509,8 @@ export default function DashboardPage() {
             <div></div>
             <div className="flex gap-3">
               <button
+                onClick={handleScoreDocuments}
+                disabled={isScoring}
                 className="px-6 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90"
                 style={{
                   backgroundColor: '#1E2A3A',
@@ -237,16 +518,18 @@ export default function DashboardPage() {
                   border: '1px solid #D4A843',
                 }}
               >
-                Score Documents
+                {isScoring ? 'Scoring...' : 'Score Documents'}
               </button>
               <button
+                onClick={handleGetExplainableScore}
+                disabled={isGstinScoring}
                 className="px-6 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90"
                 style={{
                   backgroundColor: '#D4A843',
                   color: '#0B0F1A',
                 }}
               >
-                Get Explainable Score
+                {isGstinScoring ? 'Fetching...' : 'Get Explainable Score'}
               </button>
             </div>
           </div>
@@ -405,7 +688,14 @@ export default function DashboardPage() {
                     />
                   </div>
                   <div className="flex items-center gap-2">
+                    <input
+                      ref={queryAttachmentInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleSelectQueryAttachment}
+                    />
                     <button
+                      onClick={handleAttachDocument}
                       className="px-3 py-2 rounded-lg transition-all hover:opacity-80 flex items-center gap-2"
                       style={{
                         backgroundColor: '#1E2A3A',
@@ -415,8 +705,14 @@ export default function DashboardPage() {
                       <Paperclip size={16} />
                       Attach Document
                     </button>
+                    {attachedDocumentName ? (
+                      <span className="text-xs" style={{ color: '#94A3B8' }}>
+                        {attachedDocumentName}
+                      </span>
+                    ) : null}
                   </div>
                   <button
+                    onClick={handleSendQuery}
                     className="w-full px-4 py-2 rounded-lg font-medium transition-all hover:opacity-90 flex items-center justify-center gap-2"
                     style={{
                       backgroundColor: '#D4A843',

@@ -4,7 +4,8 @@ GSTIN-based explainable scoring service backed by the saved behavior model.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+import os
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -12,7 +13,10 @@ import pandas as pd
 import shap
 from joblib import load
 
-from services.fraud_detection_service import FraudDetectionService
+try:
+    from .fraud_detection_service import FraudDetectionService
+except ImportError:  # pragma: no cover - fallback for direct module execution
+    from services.fraud_detection_service import FraudDetectionService
 
 
 EXPLANATION_RULES = {
@@ -307,6 +311,51 @@ class GstinScoringService:
             return 18
         return 9
 
+    def _amnesty_window(self) -> Dict[str, Any]:
+        start_raw = os.getenv("GST_AMNESTY_START_DATE", "").strip()
+        end_raw = os.getenv("GST_AMNESTY_END_DATE", "").strip()
+        if not start_raw or not end_raw:
+            return {
+                "active": False,
+                "window_start": None,
+                "window_end": None,
+                "pd_relief": 0.0,
+            }
+
+        try:
+            start_date = date.fromisoformat(start_raw)
+            end_date = date.fromisoformat(end_raw)
+        except ValueError:
+            return {
+                "active": False,
+                "window_start": start_raw,
+                "window_end": end_raw,
+                "pd_relief": 0.0,
+                "error": "Invalid amnesty date format. Use YYYY-MM-DD.",
+            }
+
+        today = datetime.now(timezone.utc).date()
+        return {
+            "active": start_date <= today <= end_date,
+            "window_start": start_date.isoformat(),
+            "window_end": end_date.isoformat(),
+            "pd_relief": 0.0,
+        }
+
+    def _apply_amnesty(self, pd_value: float, row: pd.Series, policy: Dict[str, Any]) -> tuple[float, Dict[str, Any]]:
+        if not policy.get("active"):
+            return pd_value, policy
+
+        late_ratio = max(0.0, min(1.0, float(row.get("late_filing_ratio", 0.0))))
+        filing_months_observed = float(row.get("filing_months_observed", 0.0))
+        confidence = max(0.25, min(1.0, filing_months_observed / 6.0))
+        relief = min(0.12, late_ratio * 0.12 * confidence)
+        adjusted = max(0.01, pd_value - relief)
+
+        next_policy = dict(policy)
+        next_policy["pd_relief"] = round(relief, 4)
+        return adjusted, next_policy
+
     def score_gstin(self, gstin: str) -> Dict[str, Any]:
         artifacts = self._load_artifacts()
         matches = artifacts.features_df[artifacts.features_df["gstin"].astype(str) == str(gstin)]
@@ -318,7 +367,9 @@ class GstinScoringService:
         base_pd = float(artifacts.model_bundle["calibrated_model"].predict_proba(x)[0, 1])
         fraud_assessment = self._fraud_detection_service.analyze_gstin(str(gstin))
         fraud_penalty = 0.18 if fraud_assessment["fraud_flag"] else 0.08 * float(fraud_assessment["fraud_score"])
-        pd_value = min(0.99, base_pd + fraud_penalty)
+        pd_pre_policy = min(0.99, base_pd + fraud_penalty)
+        amnesty_policy = self._amnesty_window()
+        pd_value, amnesty_policy = self._apply_amnesty(pd_pre_policy, row, amnesty_policy)
         risk_score = round((1.0 - pd_value) * 100.0, 2)
         credit_score = self._credit_score_from_risk_score(risk_score)
         risk_band = self._risk_band_from_credit_score(credit_score, bool(fraud_assessment["fraud_flag"]))
@@ -346,6 +397,11 @@ class GstinScoringService:
                 "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
                 *top_reasons,
             ][:5]
+        elif amnesty_policy.get("active") and amnesty_policy.get("pd_relief", 0.0) > 0:
+            top_reasons = [
+                "GST amnesty policy applied for the active window; delayed filing impact was reduced dynamically without retraining.",
+                *top_reasons,
+            ][:5]
 
         return {
             "gstin": str(gstin),
@@ -361,5 +417,7 @@ class GstinScoringService:
             "fraud_score": fraud_assessment["fraud_score"],
             "fraud_summary": fraud_assessment["fraud_summary"],
             "linked_gstins": fraud_assessment["linked_gstins"],
+            "fraud_network": fraud_assessment.get("fraud_network", {"nodes": [], "edges": [], "cycle_count": 0}),
+            "amnesty_policy": amnesty_policy,
             "score_freshness_timestamp": datetime.now(timezone.utc).isoformat(),
         }

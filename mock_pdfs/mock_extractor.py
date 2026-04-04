@@ -6,6 +6,7 @@ produces normalized fields for the scoring backend.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from pathlib import Path
@@ -83,13 +84,14 @@ def extract_loan_history(pdf_path: Path) -> Dict[str, Any]:
     }
 
 
-def build_scoring_payload() -> Dict[str, Any]:
+def build_scoring_payload(package_dir: Path | None = None) -> Dict[str, Any]:
+    source_dir = package_dir or BASE_DIR
     payload: Dict[str, Any] = {}
     documents = [
-        extract_bank_statement(BASE_DIR / "bank_statement_sample.pdf"),
-        extract_gst_filing(BASE_DIR / "gst_filing_sample.pdf"),
-        extract_incorporation_certificate(BASE_DIR / "incorporation_certificate_sample.pdf"),
-        extract_loan_history(BASE_DIR / "loan_history_disputes_sample.pdf"),
+        extract_bank_statement(source_dir / "bank_statement_sample.pdf"),
+        extract_gst_filing(source_dir / "gst_filing_sample.pdf"),
+        extract_incorporation_certificate(source_dir / "incorporation_certificate_sample.pdf"),
+        extract_loan_history(source_dir / "loan_history_disputes_sample.pdf"),
     ]
 
     for document_data in documents:
@@ -99,18 +101,31 @@ def build_scoring_payload() -> Dict[str, Any]:
     return payload
 
 
-def main() -> None:
-    result = {
+def _build_result(package_dir: Path | None = None) -> Dict[str, Any]:
+    source_dir = package_dir or BASE_DIR
+    return {
         "documents": {
-            "bank_statement": extract_bank_statement(BASE_DIR / "bank_statement_sample.pdf"),
-            "gst_filing": extract_gst_filing(BASE_DIR / "gst_filing_sample.pdf"),
+            "bank_statement": extract_bank_statement(source_dir / "bank_statement_sample.pdf"),
+            "gst_filing": extract_gst_filing(source_dir / "gst_filing_sample.pdf"),
             "incorporation_certificate": extract_incorporation_certificate(
-                BASE_DIR / "incorporation_certificate_sample.pdf"
+                source_dir / "incorporation_certificate_sample.pdf"
             ),
-            "loan_history": extract_loan_history(BASE_DIR / "loan_history_disputes_sample.pdf"),
+            "loan_history": extract_loan_history(source_dir / "loan_history_disputes_sample.pdf"),
         },
-        "scoring_payload": build_scoring_payload(),
+        "scoring_payload": build_scoring_payload(source_dir),
     }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Extract scoring payload from a mock PDF package.")
+    parser.add_argument(
+        "--package-dir",
+        type=Path,
+        default=BASE_DIR,
+        help="Folder containing bank_statement_sample.pdf, gst_filing_sample.pdf, incorporation_certificate_sample.pdf, loan_history_disputes_sample.pdf",
+    )
+    args = parser.parse_args()
+    result = _build_result(args.package_dir)
     print(json.dumps(result, indent=2))
 
 
