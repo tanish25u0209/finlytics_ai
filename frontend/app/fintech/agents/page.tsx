@@ -6,9 +6,8 @@ import {
   Shield, BarChart3, AlertTriangle, Brain, CheckCircle2
 } from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
-const API_BASE_CANDIDATES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
 
 // Mock agent statuses
 const mockAgentStatuses = {

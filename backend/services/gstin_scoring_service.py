@@ -4,8 +4,7 @@ GSTIN-based explainable scoring service backed by the saved behavior model.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -13,10 +12,7 @@ import pandas as pd
 import shap
 from joblib import load
 
-try:
-    from .fraud_detection_service import FraudDetectionService
-except ImportError:  # pragma: no cover - fallback for direct module execution
-    from services.fraud_detection_service import FraudDetectionService
+
 
 
 EXPLANATION_RULES = {
@@ -167,7 +163,6 @@ class GstinArtifacts:
 class GstinScoringService:
     def __init__(self) -> None:
         self._artifacts: GstinArtifacts | None = None
-        self._fraud_detection_service = FraudDetectionService()
 
     def _load_artifacts(self) -> GstinArtifacts:
         if self._artifacts is not None:
@@ -267,8 +262,8 @@ class GstinScoringService:
         curved = normalized ** 1.08
         return int(round(300 + (curved * 600.0)))
 
-    def _risk_band_from_credit_score(self, credit_score: int, fraud_flag: bool) -> str:
-        if fraud_flag or credit_score < 620:
+    def _risk_band_from_credit_score(self, credit_score: int) -> str:
+        if credit_score < 620:
             return "High Risk"
         if credit_score < 700:
             return "Medium Risk"
@@ -276,7 +271,7 @@ class GstinScoringService:
             return "Low Risk"
         return "Prime"
 
-    def _recommend_loan_amount(self, row: pd.Series, risk_band: str, fraud_flag: bool) -> float:
+    def _recommend_loan_amount(self, row: pd.Series, risk_band: str) -> float:
         monthly_capacity = max(
             float(row.get("monthly_inflow", 0.0)),
             float(row.get("avg_turnover", 0.0)),
@@ -291,18 +286,14 @@ class GstinScoringService:
             "Medium Risk": 1.7,
             "High Risk": 1.0,
         }[risk_band]
-        if fraud_flag:
-            base_multiple *= 0.45
 
         quality_adjustment = min(buffer_ratio + 0.55, 1.35) * (0.65 + coverage_ratio)
         raw_amount = monthly_capacity * base_multiple * quality_adjustment
         capped_amount = min(raw_amount, monthly_capacity * 4.5)
-        minimum_amount = 75000.0 if risk_band in {"Prime", "Low Risk", "Medium Risk"} and not fraud_flag else 50000.0
+        minimum_amount = 75000.0 if risk_band in {"Prime", "Low Risk", "Medium Risk"} else 50000.0
         return round(max(capped_amount, minimum_amount) / 5000.0) * 5000.0
 
-    def _recommend_tenure(self, risk_band: str, fraud_flag: bool, business_age_days: float) -> int:
-        if fraud_flag:
-            return 6
+    def _recommend_tenure(self, risk_band: str, business_age_days: float) -> int:
         if risk_band == "Prime" and business_age_days >= 720:
             return 24
         if risk_band == "Low Risk":
@@ -310,51 +301,6 @@ class GstinScoringService:
         if risk_band == "Medium Risk":
             return 18
         return 9
-
-    def _amnesty_window(self) -> Dict[str, Any]:
-        start_raw = os.getenv("GST_AMNESTY_START_DATE", "").strip()
-        end_raw = os.getenv("GST_AMNESTY_END_DATE", "").strip()
-        if not start_raw or not end_raw:
-            return {
-                "active": False,
-                "window_start": None,
-                "window_end": None,
-                "pd_relief": 0.0,
-            }
-
-        try:
-            start_date = date.fromisoformat(start_raw)
-            end_date = date.fromisoformat(end_raw)
-        except ValueError:
-            return {
-                "active": False,
-                "window_start": start_raw,
-                "window_end": end_raw,
-                "pd_relief": 0.0,
-                "error": "Invalid amnesty date format. Use YYYY-MM-DD.",
-            }
-
-        today = datetime.now(timezone.utc).date()
-        return {
-            "active": start_date <= today <= end_date,
-            "window_start": start_date.isoformat(),
-            "window_end": end_date.isoformat(),
-            "pd_relief": 0.0,
-        }
-
-    def _apply_amnesty(self, pd_value: float, row: pd.Series, policy: Dict[str, Any]) -> tuple[float, Dict[str, Any]]:
-        if not policy.get("active"):
-            return pd_value, policy
-
-        late_ratio = max(0.0, min(1.0, float(row.get("late_filing_ratio", 0.0))))
-        filing_months_observed = float(row.get("filing_months_observed", 0.0))
-        confidence = max(0.25, min(1.0, filing_months_observed / 6.0))
-        relief = min(0.12, late_ratio * 0.12 * confidence)
-        adjusted = max(0.01, pd_value - relief)
-
-        next_policy = dict(policy)
-        next_policy["pd_relief"] = round(relief, 4)
-        return adjusted, next_policy
 
     def score_gstin(self, gstin: str) -> Dict[str, Any]:
         artifacts = self._load_artifacts()
@@ -364,25 +310,19 @@ class GstinScoringService:
 
         row = matches.iloc[0]
         x = row[artifacts.feature_columns].to_frame().T
-        base_pd = float(artifacts.model_bundle["calibrated_model"].predict_proba(x)[0, 1])
-        fraud_assessment = self._fraud_detection_service.analyze_gstin(str(gstin))
-        fraud_penalty = 0.18 if fraud_assessment["fraud_flag"] else 0.08 * float(fraud_assessment["fraud_score"])
-        pd_pre_policy = min(0.99, base_pd + fraud_penalty)
-        amnesty_policy = self._amnesty_window()
-        pd_value, amnesty_policy = self._apply_amnesty(pd_pre_policy, row, amnesty_policy)
+        pd_value = float(artifacts.model_bundle["calibrated_model"].predict_proba(x)[0, 1])
         risk_score = round((1.0 - pd_value) * 100.0, 2)
         credit_score = self._credit_score_from_risk_score(risk_score)
-        risk_band = self._risk_band_from_credit_score(credit_score, bool(fraud_assessment["fraud_flag"]))
+        risk_band = self._risk_band_from_credit_score(credit_score)
         risk_category = {
             "Prime": "LOW",
             "Low Risk": "LOW",
             "Medium Risk": "MEDIUM",
             "High Risk": "HIGH",
         }[risk_band]
-        recommended_loan_amount = self._recommend_loan_amount(row, risk_band, bool(fraud_assessment["fraud_flag"]))
+        recommended_loan_amount = self._recommend_loan_amount(row, risk_band)
         recommended_tenure_months = self._recommend_tenure(
             risk_band,
-            bool(fraud_assessment["fraud_flag"]),
             float(row.get("business_age_days", 365.0)),
         )
 
@@ -390,18 +330,8 @@ class GstinScoringService:
             row,
             artifacts,
             top_n=5,
-            highlight_risk=bool(fraud_assessment["fraud_flag"]) or risk_band in {"High Risk", "Medium Risk"},
+            highlight_risk=risk_band in {"High Risk", "Medium Risk"},
         )
-        if fraud_assessment["fraud_flag"]:
-            top_reasons = [
-                "Linked GSTIN transaction graph shows repeated circular fund movement, which materially increases fraud risk.",
-                *top_reasons,
-            ][:5]
-        elif amnesty_policy.get("active") and amnesty_policy.get("pd_relief", 0.0) > 0:
-            top_reasons = [
-                "GST amnesty policy applied for the active window; delayed filing impact was reduced dynamically without retraining.",
-                *top_reasons,
-            ][:5]
 
         return {
             "gstin": str(gstin),
@@ -413,11 +343,5 @@ class GstinScoringService:
             "top_reasons": top_reasons,
             "recommended_loan_amount": recommended_loan_amount,
             "recommended_tenure_months": recommended_tenure_months,
-            "fraud_flag": fraud_assessment["fraud_flag"],
-            "fraud_score": fraud_assessment["fraud_score"],
-            "fraud_summary": fraud_assessment["fraud_summary"],
-            "linked_gstins": fraud_assessment["linked_gstins"],
-            "fraud_network": fraud_assessment.get("fraud_network", {"nodes": [], "edges": [], "cycle_count": 0}),
-            "amnesty_policy": amnesty_policy,
             "score_freshness_timestamp": datetime.now(timezone.utc).isoformat(),
         }

@@ -7,8 +7,8 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
-const CHAT_API_BASES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
+const CHAT_API_BASES = [API_BASE_URL];
 const CHAT_STORAGE_KEY = 'finserv-aim-chat-messages';
 
 type StoredChatMessage = {

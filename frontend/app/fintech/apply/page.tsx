@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 const AUTH_USERS_KEY = 'finserv-aim-auth-users';
 const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
 
@@ -80,137 +80,9 @@ type GstinResult = {
   top_reasons: string[];
   recommended_loan_amount: number;
   recommended_tenure_months: number;
-  fraud_flag: boolean;
-  fraud_score: number;
-  fraud_summary: string;
-  linked_gstins: string[];
-  fraud_network?: {
-    nodes?: Array<{ gstin: string; role?: string }>;
-    edges?: Array<{ from_gstin: string; to_gstin: string; monthly_flow_inr: number; in_cycle?: boolean }>;
-    cycle_count?: number;
-  };
-  amnesty_policy?: {
-    active?: boolean;
-    window_start?: string | null;
-    window_end?: string | null;
-    pd_relief?: number;
-  };
   score_freshness_timestamp: string;
 };
 
-const FraudNetworkGraph = ({ result }: { result: GstinResult }) => {
-  const nodes = result.fraud_network?.nodes || [];
-  const edges = result.fraud_network?.edges || [];
-  const cycleCount = Number(result.fraud_network?.cycle_count || 0);
-
-  if (!nodes.length) {
-    return (
-      <div
-        className="rounded-lg p-4 text-sm"
-        style={{ backgroundColor: 'rgba(11, 15, 26, 0.8)', border: '1px solid #1E2A3A', color: '#94A3B8' }}
-      >
-        No fraud network edges were available for this GSTIN snapshot.
-      </div>
-    );
-  }
-
-  const width = 720;
-  const height = 300;
-  const cx = width / 2;
-  const cy = height / 2;
-  const radius = Math.min(width, height) * 0.34;
-
-  const positions = new Map<string, { x: number; y: number; role: string }>();
-  nodes.forEach((node, idx) => {
-    const angle = (2 * Math.PI * idx) / Math.max(nodes.length, 1) - Math.PI / 2;
-    positions.set(node.gstin, {
-      x: cx + radius * Math.cos(angle),
-      y: cy + radius * Math.sin(angle),
-      role: node.role || 'linked',
-    });
-  });
-
-  return (
-    <div className="space-y-3">
-      <div
-        className="rounded-lg p-4"
-        style={{ backgroundColor: 'rgba(11, 15, 26, 0.8)', border: '1px solid #1E2A3A' }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <p className="text-sm font-semibold" style={{ color: '#F1F5F9' }}>Fraud Ring Topology</p>
-          <p className="text-xs" style={{ color: '#94A3B8' }}>
-            Cycle edges detected: <span style={{ color: '#F59E0B' }}>{cycleCount}</span>
-          </p>
-        </div>
-        <div className="w-full overflow-x-auto">
-          <svg width={width} height={height} className="min-w-[720px]">
-            <defs>
-              <marker id="fraud-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="#64748B" />
-              </marker>
-              <marker id="fraud-arrow-cycle" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="#F59E0B" />
-              </marker>
-            </defs>
-
-            {edges.map((edge, idx) => {
-              const from = positions.get(edge.from_gstin);
-              const to = positions.get(edge.to_gstin);
-              if (!from || !to) return null;
-              const isCycle = Boolean(edge.in_cycle);
-              const color = isCycle ? '#F59E0B' : '#64748B';
-              const marker = isCycle ? 'url(#fraud-arrow-cycle)' : 'url(#fraud-arrow)';
-              const mx = (from.x + to.x) / 2;
-              const my = (from.y + to.y) / 2;
-              return (
-                <g key={`${edge.from_gstin}-${edge.to_gstin}-${idx}`}>
-                  <line
-                    x1={from.x}
-                    y1={from.y}
-                    x2={to.x}
-                    y2={to.y}
-                    stroke={color}
-                    strokeWidth={isCycle ? 2.8 : 1.8}
-                    markerEnd={marker}
-                    opacity={0.9}
-                  />
-                  <text x={mx} y={my} fill="#CBD5E1" fontSize="10" textAnchor="middle">
-                    {Math.round(edge.monthly_flow_inr / 1000)}k
-                  </text>
-                </g>
-              );
-            })}
-
-            {nodes.map((node) => {
-              const pos = positions.get(node.gstin);
-              if (!pos) return null;
-              const isSubject = pos.role === 'subject';
-              const isRing = pos.role === 'ring_member';
-              return (
-                <g key={node.gstin}>
-                  <circle
-                    cx={pos.x}
-                    cy={pos.y}
-                    r={isSubject ? 18 : 15}
-                    fill={isSubject ? '#D4A843' : isRing ? '#F59E0B' : '#1E2A3A'}
-                    stroke={isSubject ? '#FDE68A' : '#64748B'}
-                    strokeWidth={2}
-                  />
-                  <text x={pos.x} y={pos.y + 4} fill={isSubject ? '#0B0F1A' : '#F1F5F9'} fontSize="10" textAnchor="middle">
-                    {node.gstin.slice(-3)}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      </div>
-      <p className="text-xs" style={{ color: '#94A3B8' }}>
-        Highlighted orange links represent detected circular money rotation paths.
-      </p>
-    </div>
-  );
-};
 
 type FileUploadZoneProps = {
   label: string;
@@ -548,12 +420,6 @@ export default function ApplyPage() {
         riskLevel: mapRiskLevel(data.risk_band),
         companyName: state.applicationState.companyName || `GSTIN ${data.gstin}`,
       });
-      updateAgentStatus('fraud', {
-        status: 'complete',
-        findings: data.fraud_summary,
-        anomalyDetected: data.fraud_flag,
-        completionPercent: 100,
-      });
       updateAgentStatus('decision', {
         status: 'complete',
         findings: `GSTIN score ${data.credit_score} (${data.risk_band}); recommended ₹${Number(data.recommended_loan_amount).toLocaleString('en-IN')} for ${data.recommended_tenure_months} months.`,
@@ -871,7 +737,6 @@ export default function ApplyPage() {
               <h3 className="text-2xl font-bold" style={{ color: '#F1F5F9' }}>
                 GST Filings
               </h3>
-              <Badge label="Fraud Detection Notice" type="warning" />
               <div className="space-y-4">
                 <div>
                   <label style={{ color: '#64748B' }} className="block text-sm font-bold mb-3 uppercase">
@@ -1257,69 +1122,6 @@ export default function ApplyPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div
-                      className="rounded-lg p-4"
-                      style={{ backgroundColor: 'rgba(11, 15, 26, 0.8)', border: '1px solid #1E2A3A' }}
-                    >
-                      <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#64748B' }}>
-                        Fraud Flag
-                      </p>
-                      <p className="text-base font-semibold" style={{ color: gstinResult.fraud_flag ? '#F59E0B' : '#2DD4A0' }}>
-                        {gstinResult.fraud_flag ? 'Flagged' : 'Clear'}
-                      </p>
-                    </div>
-                    <div
-                      className="rounded-lg p-4"
-                      style={{ backgroundColor: 'rgba(11, 15, 26, 0.8)', border: '1px solid #1E2A3A' }}
-                    >
-                      <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#64748B' }}>
-                        Fraud Score
-                      </p>
-                      <p className="text-base font-semibold" style={{ color: '#F1F5F9' }}>
-                        {gstinResult.fraud_score}
-                      </p>
-                    </div>
-                    <div
-                      className="rounded-lg p-4"
-                      style={{ backgroundColor: 'rgba(11, 15, 26, 0.8)', border: '1px solid #1E2A3A' }}
-                    >
-                      <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#64748B' }}>
-                        Linked GSTINs
-                      </p>
-                      <p className="text-base font-semibold break-all" style={{ color: '#F1F5F9' }}>
-                        {gstinResult.linked_gstins.length > 0 ? gstinResult.linked_gstins.join(', ') : 'None'}
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    className="rounded-lg p-4"
-                    style={{
-                      backgroundColor: gstinResult.fraud_flag ? 'rgba(245, 158, 11, 0.08)' : 'rgba(45, 212, 160, 0.06)',
-                      border: gstinResult.fraud_flag ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid rgba(45, 212, 160, 0.2)',
-                    }}
-                  >
-                    <p className="text-sm font-semibold mb-2" style={{ color: '#F1F5F9' }}>
-                      Fraud assessment
-                    </p>
-                    <p className="text-sm" style={{ color: '#DDEDEA' }}>
-                      {gstinResult.fraud_summary}
-                    </p>
-                  </div>
-                  {gstinResult.amnesty_policy?.active ? (
-                    <div
-                      className="rounded-lg p-4"
-                      style={{ backgroundColor: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)' }}
-                    >
-                      <p className="text-sm font-semibold mb-1" style={{ color: '#BAE6FD' }}>
-                        GST Amnesty Policy Applied
-                      </p>
-                      <p className="text-sm" style={{ color: '#DDEDEA' }}>
-                        Window: {gstinResult.amnesty_policy.window_start || 'n/a'} to {gstinResult.amnesty_policy.window_end || 'n/a'}; PD relief: {Number(gstinResult.amnesty_policy.pd_relief || 0).toFixed(4)}
-                      </p>
-                    </div>
-                  ) : null}
-                  <FraudNetworkGraph result={gstinResult} />
                   <div>
                     <p className="text-sm font-semibold mb-3" style={{ color: '#F1F5F9' }}>
                       Top reasons

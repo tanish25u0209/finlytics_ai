@@ -8,10 +8,10 @@ import {
 } from 'lucide-react';
 
 const APPLICATION_ASSIGNMENTS_KEY = 'finserv-aim-applications';
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 const CHAT_STORAGE_KEY = 'finserv-aim-chat-messages';
-const API_BASE_CANDIDATES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
-const CHAT_API_BASES = Array.from(new Set([API_BASE_URL, 'http://localhost:8001/api/v1']));
+const API_BASE_CANDIDATES = [API_BASE_URL];
+const CHAT_API_BASES = [API_BASE_URL];
 
 type StoredChatMessage = {
   id: number;
@@ -24,24 +24,6 @@ type StoredChatMessage = {
   message: string;
   attachmentName?: string;
   timestamp: string;
-};
-
-type FraudNetworkNode = {
-  id: string;
-  is_suspicious?: boolean;
-};
-
-type FraudNetworkEdge = {
-  from: string;
-  to: string;
-  amount?: number;
-  is_cycle_edge?: boolean;
-};
-
-type FraudNetworkPayload = {
-  nodes?: FraudNetworkNode[];
-  edges?: FraudNetworkEdge[];
-  cycle_count?: number;
 };
 
 type StoredAssignedApplication = {
@@ -292,150 +274,6 @@ const RiskGauge = ({ probabilityOfDefault }) => {
   );
 };
 
-const FraudNetworkGraph = ({ network, fraudSummary }: { network?: FraudNetworkPayload; fraudSummary?: string }) => {
-  const rawNodes = Array.isArray(network?.nodes) ? network.nodes : [];
-  const rawEdges = Array.isArray(network?.edges) ? network.edges : [];
-
-  const nodes = rawNodes
-    .map((node) => {
-      const item = (node || {}) as Record<string, unknown>;
-      const id = String(item.id || item.gstin || '').trim();
-      if (!id) {
-        return null;
-      }
-      return {
-        id,
-        is_suspicious: Boolean(item.is_suspicious || item.in_cycle || item.role === 'ring_member'),
-      };
-    })
-    .filter((node): node is { id: string; is_suspicious: boolean } => Boolean(node));
-
-  const edges = rawEdges
-    .map((edge) => {
-      const item = (edge || {}) as Record<string, unknown>;
-      const from = String(item.from || item.from_gstin || '').trim();
-      const to = String(item.to || item.to_gstin || '').trim();
-      if (!from || !to) {
-        return null;
-      }
-      return {
-        from,
-        to,
-        is_cycle_edge: Boolean(item.is_cycle_edge || item.in_cycle),
-      };
-    })
-    .filter((edge): edge is { from: string; to: string; is_cycle_edge: boolean } => Boolean(edge));
-
-  const cycleCount = Number(network?.cycle_count || 0);
-  const hasGraph = nodes.length > 0;
-  const size = 280;
-  const radius = 92;
-  const center = size / 2;
-
-  const nodePositions = nodes.reduce<Record<string, { x: number; y: number }>>((acc, node, index) => {
-    const angle = (2 * Math.PI * index) / Math.max(nodes.length, 1) - Math.PI / 2;
-    acc[node.id] = {
-      x: center + radius * Math.cos(angle),
-      y: center + radius * Math.sin(angle),
-    };
-    return acc;
-  }, {});
-
-  return (
-    <div
-      className="rounded-lg p-4 animate-in fade-in duration-300"
-      style={{ backgroundColor: '#141929', border: '1px solid #1E2A3A' }}
-    >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <p style={{ color: '#64748B' }} className="text-xs uppercase">
-            Fraud Topology (Twist 1)
-          </p>
-          <p style={{ color: '#F1F5F9' }} className="text-sm font-semibold mt-1">
-            Circular transaction ring detection graph
-          </p>
-        </div>
-        <span
-          className="text-xs px-2 py-1 rounded-full font-semibold"
-          style={{
-            backgroundColor: cycleCount > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(45, 212, 160, 0.15)',
-            color: cycleCount > 0 ? '#EF4444' : '#2DD4A0',
-          }}
-        >
-          Cycles: {cycleCount}
-        </span>
-      </div>
-
-      {!hasGraph && (
-        <p style={{ color: '#64748B' }} className="text-xs">
-          No suspicious loop detected in current GST transaction network.
-        </p>
-      )}
-
-      {hasGraph && (
-        <div className="overflow-x-auto">
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-            {edges.map((edge, idx) => {
-              const from = nodePositions[edge.from];
-              const to = nodePositions[edge.to];
-              if (!from || !to) {
-                return null;
-              }
-              return (
-                <line
-                  key={`${edge.from}-${edge.to}-${idx}`}
-                  x1={from.x}
-                  y1={from.y}
-                  x2={to.x}
-                  y2={to.y}
-                  stroke={edge.is_cycle_edge ? '#EF4444' : '#64748B'}
-                  strokeWidth={edge.is_cycle_edge ? 2.5 : 1.5}
-                  strokeOpacity={0.9}
-                />
-              );
-            })}
-
-            {nodes.map((node) => {
-              const point = nodePositions[node.id];
-              if (!point) {
-                return null;
-              }
-              return (
-                <g key={node.id}>
-                  <circle
-                    cx={point.x}
-                    cy={point.y}
-                    r={11}
-                    fill={node.is_suspicious ? '#EF4444' : '#2DD4A0'}
-                    stroke="#0B0F1A"
-                    strokeWidth={2}
-                  />
-                  <text
-                    x={point.x}
-                    y={point.y + 4}
-                    textAnchor="middle"
-                    fill="#0B0F1A"
-                    fontSize="8"
-                    fontWeight="700"
-                  >
-                    {node.id.slice(-2).toUpperCase()}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      )}
-
-      {fraudSummary && (
-        <p style={{ color: '#F59E0B' }} className="text-xs mt-2">
-          {fraudSummary}
-        </p>
-      )}
-    </div>
-  );
-};
-
 const SimpleSparkline = ({ data, color }) => {
   const normalized = Array.isArray(data)
     ? data.map((value) => Number(value)).filter((value) => Number.isFinite(value))
@@ -502,8 +340,6 @@ const CAMModal = ({
   analysis,
   scoreOutput,
   gstinOutput,
-  fraudNetwork,
-  fraudSummary,
 }) => {
   if (!isOpen) return null;
 
@@ -516,7 +352,6 @@ const CAMModal = ({
   const dscrCurrent = Number(analysis?.financial?.dscr?.current || 0);
   const currentRatioCurrent = Number(analysis?.financial?.currentRatio?.current || 0);
   const riskItems = Array.isArray(analysis?.risk?.keyRisks) ? analysis.risk.keyRisks.filter(Boolean).slice(0, 4) : [];
-  const cycleCount = Number(fraudNetwork?.cycle_count || 0);
   const recommendationTone = decision.includes('APPROVE')
     ? { bg: 'rgba(45, 212, 160, 0.1)', border: '#2DD4A0', icon: '#2DD4A0' }
     : { bg: 'rgba(245, 158, 11, 0.12)', border: '#F59E0B', icon: '#F59E0B' };
@@ -1063,9 +898,6 @@ export default function ManagerPage() {
     recommended_loan_amount?: number;
     recommended_tenure_months?: number;
     top_reasons?: string[];
-    fraud_flag?: boolean;
-    fraud_summary?: string;
-    fraud_network?: FraudNetworkPayload;
   } | undefined;
 
   const resolvedScoreOutput = {
@@ -1082,12 +914,6 @@ export default function ManagerPage() {
     recommended_loan_amount: scoringSummary.recommended_loan_amount ?? gstinOutput?.recommended_loan_amount,
     recommended_tenure_months: scoringSummary.recommended_tenure_months ?? gstinOutput?.recommended_tenure_months,
     top_reasons: scoringSummary.top_reasons || gstinOutput?.top_reasons || [],
-  };
-
-  const resolvedFraudNetwork: FraudNetworkPayload = gstinOutput?.fraud_network || {
-    nodes: [],
-    edges: [],
-    cycle_count: 0,
   };
 
   useEffect(() => {
@@ -1225,10 +1051,7 @@ export default function ManagerPage() {
     risk: {
       probabilityOfDefault: Math.round((resolvedGstinOutput.probability_of_default || 0) * 100),
       keyRisks: gstinResult
-        ? [
-            ...(gstinResult.fraud_flag ? [gstinResult.fraud_summary] : []),
-            ...(resolvedGstinOutput.top_reasons || []).slice(0, 3),
-          ]
+        ? (resolvedGstinOutput.top_reasons || []).slice(0, 3)
         : fallbackRiskItems,
       collateralValue: Math.round(recommendedLoan * 1.4),
       loanAmount: recommendedLoan,
@@ -1872,7 +1695,7 @@ export default function ManagerPage() {
                 );
               })()}
 
-              <FraudNetworkGraph network={resolvedFraudNetwork} fraudSummary={gstinOutput?.fraud_summary} />
+
             </div>
           )}
 
@@ -2098,8 +1921,6 @@ export default function ManagerPage() {
         analysis={aiAnalysis}
         scoreOutput={resolvedScoreOutput}
         gstinOutput={resolvedGstinOutput}
-        fraudNetwork={resolvedFraudNetwork}
-        fraudSummary={gstinOutput?.fraud_summary}
       />
 
       {previewDoc && (
